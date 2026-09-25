@@ -21,12 +21,22 @@ materiales:                     # densidad en kg/m^3
   acero: 7850
   laton: 8500
 
-rellenos:                       # candidatos a evaluar
+costos_usd_kg:                  # APROXIMADOS (2026, compra minorista de pocos kg, solo material,
+  plomo: 4                      # sin mecanizado, fundición ni envío). Ajustar con cotizaciones reales.
+  tungsteno_aleacion_W90: 150   # barra de aleación pesada W-Ni-Fe; la pieza mecanizada cuesta más
+  tungsteno_puro: 120
+  bismuto: 25
+  acero: 3
+  laton: 10
+  epoxy: 30
+
+rellenos:                       # candidatos a evaluar (costo_usd_kg opcional: sobrescribe costos_usd_kg)
   - {nombre: plomo_macizo,   material: plomo}
   - {nombre: W90_macizo,     material: tungsteno_aleacion_W90}
   - {nombre: bismuto_macizo, material: bismuto}
   - {nombre: acero_macizo,   material: acero}
-  - {nombre: perdigon_pb_epoxy, material: plomo, granular: {empaquetamiento: 0.62, matriz: epoxy}}
+  - {nombre: perdigon_pb_epoxy, material: plomo,
+     granular: {empaquetamiento: 0.62, matriz: epoxy, costo_grano_usd_kg: 6}}   # perdigón > lingote
 
 geometria_base:
   longitud_referencia: cuerpo   # cuerpo | total. "L_mm" del barrido se interpreta así.
@@ -168,3 +178,4 @@ salida:
   dir_datos: data
   dir_figuras: figs
   figuras: true
+  relleno_dibujo: plomo_macizo  # relleno que se dibuja en figs/dibujo__*.png

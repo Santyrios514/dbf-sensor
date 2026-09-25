@@ -86,7 +86,8 @@ def banderas_envolvente(caso: Caso) -> dict:
     def cabe(v, lim):
         return None if lim is None else bool(v <= lim + 1e-12)
 
-    return {"L_total_mm": g.L_total / MM, "h_env_mm": h_env / MM, "w_env_mm": w_env / MM,
+    return {"L_total_mm": g.L_total / MM, "D_max_aletas_mm": 2 * max(g.R, a.r_tip) / MM,
+            "h_env_mm": h_env / MM, "w_env_mm": w_env / MM,
             "cabe_largo": cabe(g.L_total, env.largo_max), "cabe_alto": cabe(h_env, env.alto_max),
             "cabe_ancho": cabe(w_env, env.ancho_max)}
 
@@ -169,7 +170,8 @@ def _analizar_relleno(res: ResultadoCaso, rel: Relleno) -> ResultadoRelleno:
     V_ext, V_int = cav.V_ext, cav.V_int
     fila = {
         "config_id": caso.id, "relleno": rel.nombre, "rho_b_kg_m3": rel.rho_b,
-        "L_mm": g.L / MM, "D_mm": g.D / MM, "V_ext_cm3": V_ext / CM3, "V_int_cm3": V_int / CM3,
+        "costo_usd_kg": rel.costo_usd_kg, "L_mm": g.L / MM, "D_mm": g.D / MM,
+        "V_ext_cm3": V_ext / CM3, "V_int_cm3": V_int / CM3,
         "x_b0_mm": res.x_b0 / MM, "ell_geo_mm": ell_geo / MM,
         "x_CP_mm": x_CP / MM, "x_CP_fuente": res.x_CP_fuente,
         "dx_CP_or_vs_interno_mm": (x_CP - res.cp_int.x_CP) / MM if res.x_CP_fuente == "openrocket" else NAN,
@@ -239,6 +241,7 @@ def _analizar_relleno(res: ResultadoCaso, rel: Relleno) -> ResultadoRelleno:
                 "alpha_trim_deg": float(np.degrees(alpha_trim(m_u, xcg_u, x_T_de(xcg_u), x_CP, vu.q,
                                                               S_ref, CNa))),
                 "x_T_trim_cero_mm": xcg_u / MM, "ell_trasero_mm": ell2 / MM,
+                "costo_relleno_usd": rel.rho_b * Vu * rel.costo_usd_kg,
                 "m_relleno_trasero_g": rel.rho_b * V2 / G, "limitante_masa": limitante,
             })
         ells = np.linspace(0.0, ell_geo, nu.n_ell)
@@ -274,6 +277,7 @@ def _analizar_relleno(res: ResultadoCaso, rel: Relleno) -> ResultadoRelleno:
             m_p = float(mod.m_con_trasero(ell, ell2))
             xcg = float(mod.x_CG_con_trasero(ell, ell2))
             p.update({"m_total_g": m_p / G, "x_CG_mm": xcg / MM, "SM_cal": SM(xcg),
+                      "costo_usd": m_obj * rel.costo_usd_kg,
                       "alpha_trim_deg": float(np.degrees(alpha_trim(m_p, xcg, x_T_de(xcg), x_CP, vu.q,
                                                                     S_ref, CNa)))})
         presupuestos.append(p)

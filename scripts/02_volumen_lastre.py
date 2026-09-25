@@ -106,7 +106,8 @@ def main(argv=None) -> int:
         or_comp = pd.read_csv(rutas["componentes"])
 
     tol = Tolerancias.desde(cfg.verificacion)
-    filas, presup, capas, ventanas, valores = [], [], [], [], []
+    filas, presup, capas, ventanas, valores, confs = [], [], [], [], [], []
+    relleno_dibujo = cfg.salida.get("relleno_dibujo", rellenos[0].nombre if rellenos else "")
     if figuras:
         dir_figs.mkdir(parents=True, exist_ok=True)
     for caso in casos:
@@ -126,6 +127,24 @@ def main(argv=None) -> int:
         res = analizar_caso(caso, rellenos=rellenos, perfil=perfil, aero_or=aero, masas_or=masas_or,
                             tol=tol)
         valores.append({"config_id": caso.id, **caso.barrido})
+        g_a = caso.geom.aletas
+        rr_dib = next((rr for rr in res.rellenos if rr.relleno.nombre == relleno_dibujo),
+                      res.rellenos[0] if res.rellenos else None)
+        ruta_dib = dir_figs / f"dibujo__{caso.id}.png"
+        f0 = res.rellenos[0].fila if res.rellenos else {}
+        confs.append({
+            "config_id": caso.id, "L_mm": caso.geom.L / MM, "L_total_mm": caso.geom.L_total / MM,
+            "D_mm": caso.geom.D / MM, "D_max_aletas_mm": f0.get("D_max_aletas_mm"),
+            "h_env_mm": f0.get("h_env_mm"), "w_env_mm": f0.get("w_env_mm"), "aletas_n": g_a.params.n,
+            "aleta_h_tip_mm": g_a.h / MM, "aleta_extension_mm": g_a.params.e / MM,
+            "aleta_rotacion_deg": math.degrees(g_a.params.rotacion), "r_tip_mm": g_a.r_tip / MM,
+            "x_CP_mm": res.x_CP / MM, "x_CP_fuente": res.x_CP_fuente,
+            "dibujo": str(ruta_dib.relative_to(base)) if figuras and ruta_dib.is_relative_to(base) else
+            (str(ruta_dib) if figuras else ""),
+        })
+        if figuras:
+            from sensor_lastre.figuras import fig_dibujo
+            fig_dibujo(res, rr_dib, ruta_dib)
         capas += res.filas_masas_capas()
         for rr in res.rellenos:
             filas.append(rr.fila)
@@ -151,6 +170,7 @@ def main(argv=None) -> int:
     _escribir(pd.DataFrame(capas), esquemas.MASAS_CAPAS, dir_datos / "masas_capas.csv")
     _escribir(pd.DataFrame(presup), esquemas.PRESUPUESTOS, dir_datos / "presupuestos.csv")
     _escribir(pd.DataFrame(ventanas), esquemas.VENTANAS, dir_datos / "ventanas.csv")
+    _escribir(pd.DataFrame(confs), esquemas.CONFIGURACIONES, dir_datos / "configuraciones.csv")
     from sensor_lastre.optimizacion import ranking
     exigir = (cfg.raw.get("optimizacion") or {}).get("exigir") or []
     opt = ranking(pd.read_csv(dir_datos / "resultados.csv"), exigir)

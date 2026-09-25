@@ -64,7 +64,8 @@ Opciones comunes: `--solo id1,id2`, `--rellenos plomo_macizo,W90_macizo`, `--sin
 | `or_perfiles.csv` | r_e(x) muestreado de OpenRocket |
 | `resultados.csv` | una fila por configuración × relleno. `_geo` = límite geométrico; sin sufijo = ℓ_SM,max |
 | `optimo.csv` | **ranking por el criterio del equipo: máxima masa de lastre con SM ≥ SM_min**, por relleno, solo entre las configuraciones que caben en la bahía (`optimizacion.exigir`). `limitante_masa` dice si la masa la limita el SM o la geometría |
-| `presupuestos.csv` | para cada masa objetivo de lastre: ℓ delantero, ℓ trasero, `no_cabe`, CG, SM y trim |
+| `presupuestos.csv` | para cada masa objetivo de lastre: ℓ delantero, ℓ trasero, `no_cabe`, CG, SM, trim y costo |
+| `configuraciones.csv` | una fila por configuración: L total, D, **D máx. con aletas** ($2\max(R, r_{tip})$), alto y ancho de bahía, geometría de aleta, x_CP y ruta del dibujo |
 | `masas_capas.csv`, `curvas/`, `ventanas.csv` | detalle por capa, curvas ℓ → CG/SM/trim y todos los intervalos que cumplen el SM |
 
 Figuras (`figs/`):
@@ -72,6 +73,14 @@ Figuras (`figs/`):
   `h_tip`, una serie por `extension` y una figura por valor de los demás parámetros (p. ej.
   `lastre_trasero`); el marcador hueco indica que no cabe en la bahía.
 - `perfil__*`: perfil, capas, polígono de aleta, lastre útil (delantero y trasero), electrónica y x_CP.
+- `dibujo__*`: **dibujo acotado de cada configuración**. Vista lateral: cuerpo, aletas proyectadas
+  según la rotación, lastre y electrónica del óptimo, CG y CP. Vista frontal: D máx. con aletas y
+  rectángulo de bahía. El relleno dibujado se elige en `salida.relleno_dibujo`.
+
+**Costo del relleno** (`costo_usd_kg`, `costo_relleno_usd` en `resultados.csv` y `optimo.csv`):
+m_relleno × precio por kg de `costos_usd_kg`. Para el perdigón con epoxy se usa el promedio
+ponderado por fracción de masa. Son **precios aproximados de material** (2026, compra minorista de
+pocos kg). No incluyen mecanizado, moldes ni envío, así que ajústalos con cotizaciones reales.
 - `cg_sm__*`: x_CG(ℓ) y SM(ℓ).
 
 ### Banderas
@@ -122,6 +131,20 @@ se filtra por el alto conocido (122 mm). Barrido: `h_tip` × `extension` × rota
 | 20 / 40 / + (base) | 4 116 g | 1.00 | 101.5 × 101.5 mm | aleta chica: el SM limita |
 
 Con W90, los mismos diseños dan 10 272 g (30/40) y 10 410 g (cavidad llena).
+
+Costo aproximado del relleno del diseño recomendado (40/40/X):
+
+| Relleno | Masa | US$/kg | Costo material |
+|---|---|---|---|
+| Plomo | 6.94 kg | 4 | ≈ US$ 28 |
+| Perdigón + epoxy | 4.57 kg | 7.4 | ≈ US$ 34 |
+| Bismuto | 5.99 kg | 25 | ≈ US$ 150 |
+| W90 | 10.41 kg | 150 | ≈ US$ 1 560 (más mecanizado) |
+| Acero | 4.81 kg | 3 | ≈ US$ 14 |
+
+El diámetro máximo con aletas (circunferencia de las puntas) es $2 r_{tip}$ y no depende de la
+rotación: 141.5 mm con h_tip = 40. En X la bahía necesaria es menor, 100 × 100 mm, porque las
+puntas quedan en las esquinas del rectángulo.
 
 1. **La masa máxima físicamente posible es la cavidad llena:** 612 cm³, es decir 6.94 kg de plomo
    o 10.4 kg de W90. Se alcanza con h_tip ≥ 40 mm y tapón trasero. Por encima de eso, más aleta

@@ -17,7 +17,7 @@ import yaml
 
 from . import aletas as mod_aletas
 from .atmosfera import isa
-from .materiales import Capa, Relleno, densidad_granular, espesor_total
+from .materiales import Capa, Relleno, costo_granular, densidad_granular, espesor_total
 from .perfiles import FORMAS, radio_superficie
 
 MM = 1e-3
@@ -305,18 +305,26 @@ def _parametro(forma: str, param: Any, donde: str, errores: list[str]) -> float 
 
 def _rellenos(raw: dict, errores: list[str]) -> tuple[Relleno, ...]:
     mats = raw.get("materiales", {})
+    costos = raw.get("costos_usd_kg") or {}
     out = []
     for i, r in enumerate(raw.get("rellenos", [])):
         d = f"rellenos[{i}] ({r.get('nombre', '?')})"
-        rho = _material(r.get("material", ""), mats, d, errores)
+        mat = r.get("material", "")
+        rho = _material(mat, mats, d, errores)
+        c = float(r.get("costo_usd_kg", costos.get(mat, math.nan)))
         gran = r.get("granular")
         if gran:
             phi = float(gran.get("empaquetamiento", math.nan))
             if not 0 < phi < 1:
                 errores.append(f"{d}: empaquetamiento debe estar en (0, 1) (vale {phi})")
-            rho_m = _material(gran.get("matriz", ""), mats, d + ".matriz", errores)
+            matriz = gran.get("matriz", "")
+            rho_m = _material(matriz, mats, d + ".matriz", errores)
+            c_grano = float(gran.get("costo_grano_usd_kg", costos.get(mat, math.nan)))
+            c = costo_granular(phi, rho, rho_m, c_grano, float(costos.get(matriz, math.nan)))
             rho = densidad_granular(rho, rho_m, phi)
-        out.append(Relleno(nombre=r["nombre"], rho_b=rho))
+        if math.isfinite(c) and c < 0:
+            errores.append(f"{d}: el costo por kg debe ser ≥ 0")
+        out.append(Relleno(nombre=r["nombre"], rho_b=rho, costo_usd_kg=c))
     if not out:
         errores.append("rellenos: la lista está vacía")
     return tuple(out)

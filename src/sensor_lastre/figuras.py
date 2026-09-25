@@ -198,3 +198,125 @@ def _fig_barrido_grupo(df, px, ps, SM_min, dir_fig, sufijo):
                          fontsize=9, color=TINTA2)
             fig.savefig(dir_fig / f"{archivo}__{rel}{sufijo}.png", dpi=150)
             plt.close(fig)
+
+
+# --------------------------------------------------------------------------- dibujo de la configuración
+
+
+def _cota_h(ax, x0, x1, y, texto, color=TINTA):
+    ax.annotate("", (x0, y), (x1, y), arrowprops=dict(arrowstyle="<->", color=color, lw=0.9,
+                                                      shrinkA=0, shrinkB=0))
+    ax.text((x0 + x1) / 2, y, texto, ha="center", va="bottom", fontsize=8, color=color,
+            bbox=dict(fc=SUPERFICIE, ec="none", pad=0.5))
+
+
+def _cota_v(ax, x, y0, y1, texto, color=TINTA, lado="left"):
+    ax.annotate("", (x, y0), (x, y1), arrowprops=dict(arrowstyle="<->", color=color, lw=0.9,
+                                                      shrinkA=0, shrinkB=0))
+    ax.text(x + (-2 if lado == "left" else 2), (y0 + y1) / 2, texto, ha="right" if lado == "left" else "left",
+            va="center", fontsize=8, color=color, rotation=90)
+
+
+def fig_dibujo(res: ResultadoCaso, rr: ResultadoRelleno | None, ruta: Path):
+    """Dibujo acotado de la configuración: vista lateral (cuerpo, aletas proyectadas según su
+    rotación, lastre delantero y trasero, electrónica, CG y CP) y vista frontal (desde la nariz)
+    con el diámetro máximo con aletas y el rectángulo de bahía que exige."""
+    caso, cav = res.caso, res.cav
+    g, a = caso.geom, caso.geom.aletas
+    pa = a.params
+    x = cav.x / MM
+    R, r_tip, Lt = g.R / MM, a.r_tip / MM, g.L_total / MM
+    phis = pa.rotacion + 2 * np.pi * np.arange(pa.n) / pa.n  # desde la vertical
+    D_max = 2 * max(g.R, a.r_tip) / MM
+    from .aletas import envolvente
+    h_env, w_env = (v / MM for v in envolvente(a.r_tip, g.R, pa.n, pa.rotacion))
+
+    fig, (al, af) = plt.subplots(1, 2, figsize=(12.5, 4.6), gridspec_kw={"width_ratios": [3.3, 1]},
+                                 constrained_layout=True)
+
+    # --- vista lateral: aletas (proyección r·cos φ sobre el plano vertical), detrás del cuerpo
+    P = a.poligono / MM
+    for phi in phis:
+        c = np.cos(phi)
+        if abs(c) < 1e-6:  # aleta de canto: solo asoma detrás de la base
+            al.plot([P[:, 0].min(), P[:, 0].max()], [0, 0], color=TINTA2, lw=1.2, zorder=0.5)
+            continue
+        al.fill(P[:, 0], P[:, 1] * c, color=AMARILLO, alpha=0.45, lw=0, zorder=0.5)
+        al.plot(np.r_[P[:, 0], P[0, 0]], np.r_[P[:, 1], P[0, 1]] * c, color=TINTA2, lw=0.8, zorder=0.5)
+    al.fill_between(x, -cav.r_e / MM, cav.r_e / MM, color="#e4e3df", lw=0)
+    al.plot(x, cav.r_e / MM, color=TINTA, lw=1.1)
+    al.plot(x, -cav.r_e / MM, color=TINTA, lw=1.1)
+    al.plot(x, cav.r_i / MM, color=TINTA2, lw=0.5)
+    al.plot(x, -cav.r_i / MM, color=TINTA2, lw=0.5)
+
+    titulo = f"{caso.id}"
+    if rr is not None and rr.ventana is not None and np.isfinite(rr.ventana.ell_SM_max):
+        mod, ell1 = rr.modelo, rr.ventana.ell_SM_max
+        ell2 = rr.fila.get("ell_trasero_mm", 0.0) * MM
+        tramos = [(res.x_b0, res.x_b0 + ell1)]
+        if ell2 > 0:
+            tramos.append((mod.x_r0(ell1), mod.x_r0(ell1) + ell2))
+        for k, (t0, t1) in enumerate(tramos):
+            m = (cav.x >= t0) & (cav.x <= t1)
+            al.fill_between(x[m], -cav.r_i[m] / MM, cav.r_i[m] / MM, color=AZUL, alpha=0.7, lw=0,
+                            label=f"lastre ({rr.relleno.nombre})" if k == 0 else None)
+        x_e = float(mod.x_e(ell1))
+        m = (cav.x >= x_e) & (cav.x <= x_e + caso.electronica.Le)
+        al.fill_between(x[m], -cav.r_i[m] / MM, cav.r_i[m] / MM, color=AQUA, alpha=0.55, lw=0,
+                        label="electrónica")
+        f = rr.fila
+        xcg = f["x_CG_mm"]
+        al.plot(xcg, 0, "o", ms=9, mfc=SUPERFICIE, mec=TINTA, mew=1.5, zorder=5)
+        al.plot(xcg, 0, "o", ms=3, color=TINTA, zorder=6)
+        al.annotate(f"CG {xcg:.0f}", (xcg, 0), textcoords="offset points", xytext=(0, -16), ha="center",
+                    fontsize=8, color=TINTA)
+        costo = f.get("costo_relleno_usd", np.nan)
+        titulo += (f" · lastre {f['m_relleno_g'] / 1000:.2f} kg de {rr.relleno.nombre}"
+                   f" (≈ US$ {costo:,.0f}) · SM {f['SM_cal']:.2f}")
+    xcp = res.x_CP / MM
+    al.plot(xcp, 0, "D", ms=7, mfc=NARANJA, mec=TINTA, mew=0.8, zorder=5)
+    al.annotate(f"CP {xcp:.0f}", (xcp, 0), textcoords="offset points", xytext=(0, 9), ha="center",
+                fontsize=8, color=TINTA)
+
+    ymax = max(R, r_tip) * 1.25
+    _cota_h(al, 0, Lt, -ymax * 0.95, f"L total = {Lt:.1f} mm (cuerpo {g.L / MM:.0f})")
+    _cota_v(al, g.nariz.Ln / MM + 20, -R, R, f"D = {g.D / MM:.0f}")
+    al.set_xlim(-8, Lt + 8)
+    al.set_ylim(-ymax * 1.08, ymax)
+    al.set_aspect("equal")
+    al.grid(False)
+    al.set_xlabel("x [mm] (desde la punta)")
+    al.set_title(f"Vista lateral · aletas a {np.degrees(pa.rotacion):.0f}°", loc="left", fontsize=9)
+    al.legend(frameon=False, loc="upper left", fontsize=8, ncol=2)
+
+    # --- vista frontal (desde la nariz): aletas como placas de espesor t, cuerpo encima
+    t = pa.t / MM
+    r_in = pa.r_in / MM
+    for phi in phis:
+        u = np.array([np.sin(phi), np.cos(phi)])  # dirección radial (x horizontal, y vertical)
+        n = np.array([u[1], -u[0]])
+        c = [r_in * u + t / 2 * n, r_tip * u + t / 2 * n, r_tip * u - t / 2 * n, r_in * u - t / 2 * n]
+        c = np.array(c)
+        af.fill(c[:, 0], c[:, 1], color=AMARILLO, alpha=0.8, ec=TINTA2, lw=0.8)
+    af.add_patch(plt.Circle((0, 0), R, fc="#e4e3df", ec=TINTA, lw=1.1))
+    af.add_patch(plt.Circle((0, 0), g.cola.Ra / MM, fc="none", ec=TINTA2, lw=0.6, ls=":"))
+    af.add_patch(plt.Circle((0, 0), D_max / 2, fc="none", ec=NARANJA, lw=1.0, ls="--"))
+    af.add_patch(plt.Rectangle((-w_env / 2, -h_env / 2), w_env, h_env, fc="none", ec=AZUL, lw=1.2, ls="--"))
+    lim = max(D_max, h_env, w_env) / 2 * 1.32
+    _cota_h(af, -w_env / 2, w_env / 2, -h_env / 2 - lim * 0.12, f"ancho {w_env:.1f}", AZUL)
+    _cota_v(af, -w_env / 2 - lim * 0.1, -h_env / 2, h_env / 2, f"alto {h_env:.1f}", AZUL)
+    af.text(0, lim * 0.93, f"D máx. con aletas = {D_max:.1f} mm", ha="center", va="top", fontsize=8,
+            color=NARANJA, bbox=dict(fc=SUPERFICIE, ec="none", pad=0.5))
+    af.set_xlim(-lim, lim)
+    af.set_ylim(-lim, lim)
+    af.set_aspect("equal")
+    af.grid(False)
+    af.set_xticks([])
+    af.set_yticks([])
+    for s in af.spines.values():
+        s.set_visible(False)
+    af.set_title("Vista frontal · bahía (azul)", loc="left", fontsize=9)
+
+    fig.suptitle(titulo, x=0.01, ha="left", fontsize=10)
+    fig.savefig(ruta, dpi=160)
+    plt.close(fig)

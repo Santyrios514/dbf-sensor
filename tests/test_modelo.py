@@ -358,3 +358,46 @@ def test_ranking_desempata_por_SM_y_bahia():
         "cabe_alto": [True] * 3, "cabe_ancho": [None] * 3,
     })
     assert list(ranking(df, ["cabe_alto"])["config_id"]) == ["c", "b", "a"]
+
+
+# --------------------------------------------------------------------------- costo, D máx. y dibujo
+
+
+def test_costo_relleno(raw):
+    raw["geometria_base"]["aletas"]["h_tip"]["valor"] = 40
+    cfg = cargar(solo(raw, 350, 65))
+    for rel in cfg.rellenos:
+        f = analizar_caso(cfg.casos[0], rellenos=[rel]).rellenos[0].fila
+        assert f["costo_usd_kg"] == pytest.approx(rel.costo_usd_kg)
+        assert f["costo_relleno_usd"] == pytest.approx(f["m_relleno_g"] * 1e-3 * rel.costo_usd_kg, rel=1e-9)
+    c = {r.nombre: r.costo_usd_kg for r in cfg.rellenos}
+    assert c["plomo_macizo"] == raw["costos_usd_kg"]["plomo"]
+    # perdigón + epoxy: promedio ponderado por fracción de masa
+    w = 0.62 * 11340 / (0.62 * 11340 + 0.38 * 1150)
+    assert c["perdigon_pb_epoxy"] == pytest.approx(w * 6 + (1 - w) * raw["costos_usd_kg"]["epoxy"])
+
+
+def test_costo_sin_precio_es_nan(raw):
+    raw["costos_usd_kg"].pop("acero")
+    cfg = cargar(solo(raw, 350, 65))
+    assert math.isnan({r.nombre: r.costo_usd_kg for r in cfg.rellenos}["acero_macizo"])
+
+
+@pytest.mark.parametrize("rot", [0, 45])
+def test_diametro_maximo_con_aletas(raw, rot):
+    raw["geometria_base"]["aletas"]["rotacion_deg"] = rot
+    caso = cargar(solo(raw, 350, 65)).casos[0]
+    f = analizar_caso(caso, rellenos=[cargar(raw).rellenos[0]]).rellenos[0].fila
+    assert f["D_max_aletas_mm"] == pytest.approx(2 * caso.geom.aletas.r_tip / MM)  # no depende de la rotación
+    assert f["D_max_aletas_mm"] >= max(f["h_env_mm"], f["w_env_mm"]) - 1e-9
+
+
+def test_dibujo(raw, tmp_path):
+    from sensor_lastre.figuras import fig_dibujo
+    raw["geometria_base"]["aletas"].update(rotacion_deg=45)
+    raw["geometria_base"]["aletas"]["h_tip"]["valor"] = 40
+    cfg = cargar(solo(raw, 350, 65))
+    res = analizar_caso(cfg.casos[0], rellenos=[cfg.rellenos[0]])
+    ruta = tmp_path / "dibujo.png"
+    fig_dibujo(res, res.rellenos[0], ruta)
+    assert ruta.stat().st_size > 20_000

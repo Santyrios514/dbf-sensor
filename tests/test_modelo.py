@@ -358,3 +358,92 @@ def test_ranking_desempata_por_SM_y_bahia():
         "cabe_alto": [True] * 3, "cabe_ancho": [None] * 3,
     })
     assert list(ranking(df, ["cabe_alto"])["config_id"]) == ["c", "b", "a"]
+
+
+# --------------------------------------------------------------------------- costo, D máx. y dibujo
+
+
+def test_costo_relleno(raw):
+    raw["geometria_base"]["aletas"]["h_tip"]["valor"] = 40
+    cfg = cargar(solo(raw, 350, 65))
+    for rel in cfg.rellenos:
+        f = analizar_caso(cfg.casos[0], rellenos=[rel]).rellenos[0].fila
+        assert f["costo_usd_kg"] == pytest.approx(rel.costo_usd_kg)
+        assert f["costo_relleno_usd"] == pytest.approx(f["m_relleno_g"] * 1e-3 * rel.costo_usd_kg, rel=1e-9)
+    c = {r.nombre: r.costo_usd_kg for r in cfg.rellenos}
+    assert c["plomo_macizo"] == raw["costos_usd_kg"]["plomo"]
+    # perdigón + epoxy: promedio ponderado por fracción de masa
+    w = 0.62 * 11340 / (0.62 * 11340 + 0.38 * 1150)
+    assert c["perdigon_pb_epoxy"] == pytest.approx(w * 6 + (1 - w) * raw["costos_usd_kg"]["epoxy"])
+
+
+def test_costo_sin_precio_es_nan(raw):
+    raw["costos_usd_kg"].pop("acero")
+    cfg = cargar(solo(raw, 350, 65))
+    assert math.isnan({r.nombre: r.costo_usd_kg for r in cfg.rellenos}["acero_macizo"])
+
+
+@pytest.mark.parametrize("rot", [0, 45])
+def test_diametro_maximo_con_aletas(raw, rot):
+    raw["geometria_base"]["aletas"]["rotacion_deg"] = rot
+    caso = cargar(solo(raw, 350, 65)).casos[0]
+    f = analizar_caso(caso, rellenos=[cargar(raw).rellenos[0]]).rellenos[0].fila
+    assert f["D_max_aletas_mm"] == pytest.approx(2 * caso.geom.aletas.r_tip / MM)  # no depende de la rotación
+    assert f["D_max_aletas_mm"] >= max(f["h_env_mm"], f["w_env_mm"]) - 1e-9
+
+
+def test_dibujo(raw, tmp_path):
+    from sensor_lastre.figuras import fig_dibujo
+    raw["geometria_base"]["aletas"].update(rotacion_deg=45)
+    raw["geometria_base"]["aletas"]["h_tip"]["valor"] = 40
+    cfg = cargar(solo(raw, 350, 65))
+    res = analizar_caso(cfg.casos[0], rellenos=[cfg.rellenos[0]])
+    ruta = tmp_path / "dibujo.png"
+    fig_dibujo(res, res.rellenos[0], ruta)
+    assert ruta.stat().st_size > 20_000
+
+
+# --------------------------------------------------------------------------- amarre y trim
+
+
+def _caso_recomendado(raw, **remolque):
+    raw["geometria_base"]["aletas"].update(rotacion_deg=45)
+    raw["geometria_base"]["aletas"]["h_tip"]["valor"] = 40
+    raw["remolque"].update(remolque)
+    cfg = cargar(solo(raw, 350, 65))
+    return cfg.casos[0], cfg.rellenos[0]
+
+
+def test_amarre_en_CG_por_defecto(raw):
+    caso, plomo = _caso_recomendado(raw)
+    assert caso.remolque.modo == "en_CG"
+    f = analizar_caso(caso, rellenos=[plomo]).rellenos[0].fila
+    assert f["alpha_trim_deg"] == pytest.approx(0.0, abs=1e-9)
+    assert "trim_no_lineal" not in f["banderas"]
+
+
+def test_tolerancia_amarre(raw):
+    from sensor_lastre import G0
+    caso, plomo = _caso_recomendado(raw)
+    f = analizar_caso(caso, rellenos=[plomo]).rellenos[0].fila
+    m, xcg, xcp = f["m_total_g"] * 1e-3, f["x_CG_mm"] * MM, f["x_CP_mm"] * MM
+    S, q = math.pi * caso.geom.D**2 / 4, caso.vuelo.q
+    tol = math.radians(5) * q * S * f["CN_alpha_rad"] * (xcp - xcg) / (m * G0)
+    assert f["tol_amarre_mm"] == pytest.approx(tol / MM, rel=1e-9)
+    # consistencia: un error de x_T igual a la tolerancia da ≈ 5° de trim
+    a = math.degrees(alpha_trim(m, xcg, xcg - tol, xcp, q, S, f["CN_alpha_rad"]))
+    assert a == pytest.approx(5.0, rel=0.02)
+    assert 0.5 < f["tol_amarre_mm"] < 3  # del orden del mm con ~7 kg a 30 m/s
+
+
+def test_trim_no_lineal(raw):
+    caso, plomo = _caso_recomendado(raw, x_T={"modo": "relativo_L", "valor": 0.15})
+    f = analizar_caso(caso, rellenos=[plomo]).rellenos[0].fila
+    assert abs(f["alpha_trim_deg"]) > 15 and "trim_no_lineal" in f["banderas"]
+
+
+def test_validacion_alphas_remolque(raw):
+    from sensor_lastre.config import ConfigError
+    raw["remolque"].update(alpha_trim_max_deg=20, alpha_lineal_max_deg=15)
+    with pytest.raises(ConfigError, match="alpha_trim_max_deg"):
+        cargar(solo(raw, 350, 65))

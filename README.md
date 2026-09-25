@@ -64,7 +64,8 @@ Opciones comunes: `--solo id1,id2`, `--rellenos plomo_macizo,W90_macizo`, `--sin
 | `or_perfiles.csv` | r_e(x) muestreado de OpenRocket |
 | `resultados.csv` | una fila por configuración × relleno. `_geo` = límite geométrico; sin sufijo = ℓ_SM,max |
 | `optimo.csv` | **ranking por el criterio del equipo: máxima masa de lastre con SM ≥ SM_min**, por relleno, solo entre las configuraciones que caben en la bahía (`optimizacion.exigir`). `limitante_masa` dice si la masa la limita el SM o la geometría |
-| `presupuestos.csv` | para cada masa objetivo de lastre: ℓ delantero, ℓ trasero, `no_cabe`, CG, SM y trim |
+| `presupuestos.csv` | para cada masa objetivo de lastre: ℓ delantero, ℓ trasero, `no_cabe`, CG, SM, trim y costo |
+| `configuraciones.csv` | una fila por configuración: L total, D, **D máx. con aletas** ($2\max(R, r_{tip})$), alto y ancho de bahía, geometría de aleta, x_CP y ruta del dibujo |
 | `masas_capas.csv`, `curvas/`, `ventanas.csv` | detalle por capa, curvas ℓ → CG/SM/trim y todos los intervalos que cumplen el SM |
 
 Figuras (`figs/`):
@@ -72,6 +73,14 @@ Figuras (`figs/`):
   `h_tip`, una serie por `extension` y una figura por valor de los demás parámetros (p. ej.
   `lastre_trasero`); el marcador hueco indica que no cabe en la bahía.
 - `perfil__*`: perfil, capas, polígono de aleta, lastre útil (delantero y trasero), electrónica y x_CP.
+- `dibujo__*`: **dibujo acotado de cada configuración**. Vista lateral: cuerpo, aletas proyectadas
+  según la rotación, lastre y electrónica del óptimo, CG y CP. Vista frontal: D máx. con aletas y
+  rectángulo de bahía. El relleno dibujado se elige en `salida.relleno_dibujo`.
+
+**Costo del relleno** (`costo_usd_kg`, `costo_relleno_usd` en `resultados.csv` y `optimo.csv`):
+m_relleno × precio por kg de `costos_usd_kg`. Para el perdigón con epoxy se usa el promedio
+ponderado por fracción de masa. Son **precios aproximados de material** (2026, compra minorista de
+pocos kg). No incluyen mecanizado, moldes ni envío, así que ajústalos con cotizaciones reales.
 - `cg_sm__*`: x_CG(ℓ) y SM(ℓ).
 
 ### Banderas
@@ -84,6 +93,7 @@ Figuras (`figs/`):
 | `margen_SM_bajo` | $SM_\infty - SM_{min}$ < `umbral_margen_bajo_cal` |
 | `no_unimodal` | x_CG(ℓ) tiene más de un valle o la ventana está partida (ver `ventanas.csv`) |
 | `inestable_respecto_remolque` | x_CP ≤ x_T |
+| `trim_no_lineal` | \|α_trim\| > `alpha_lineal_max_deg`: el amarre está tan lejos del CG que la fórmula lineal no vale |
 | `dif_CP_alta` | \|x_CP,OR − x_CP,interno\| > 5 % de L_cuerpo |
 | `dif_masa_alta` | la masa de algún componente difiere de OpenRocket en más de 3 % (aletas: 2 %). Detecta, por ejemplo, una transición marcada *Filled* |
 
@@ -123,6 +133,20 @@ se filtra por el alto conocido (122 mm). Barrido: `h_tip` × `extension` × rota
 
 Con W90, los mismos diseños dan 10 272 g (30/40) y 10 410 g (cavidad llena).
 
+Costo aproximado del relleno del diseño recomendado (40/40/X):
+
+| Relleno | Masa | US$/kg | Costo material |
+|---|---|---|---|
+| Plomo | 6.94 kg | 4 | ≈ US$ 28 |
+| Perdigón + epoxy | 4.57 kg | 7.4 | ≈ US$ 34 |
+| Bismuto | 5.99 kg | 25 | ≈ US$ 150 |
+| W90 | 10.41 kg | 150 | ≈ US$ 1 560 (más mecanizado) |
+| Acero | 4.81 kg | 3 | ≈ US$ 14 |
+
+El diámetro máximo con aletas (circunferencia de las puntas) es $2 r_{tip}$ y no depende de la
+rotación: 141.5 mm con h_tip = 40. En X la bahía necesaria es menor, 100 × 100 mm, porque las
+puntas quedan en las esquinas del rectángulo.
+
 1. **La masa máxima físicamente posible es la cavidad llena:** 612 cm³, es decir 6.94 kg de plomo
    o 10.4 kg de W90. Se alcanza con h_tip ≥ 40 mm y tapón trasero. Por encima de eso, más aleta
    solo aumenta el SM.
@@ -141,12 +165,17 @@ Con W90, los mismos diseños dan 10 272 g (30/40) y 10 410 g (cavidad llena).
 - **SM = 1.00 exacto no deja margen para la incertidumbre del CP.** El CP de OpenRocket es optimista
   (advertencia *jagged*) y el Barrowman interno difiere 0.5–3 mm. Con el tapón trasero, cada 0.1 cal
   de margen cuesta ≈ 230 g de plomo. Para reservarlo, basta subir `SM_min_cal`, por ejemplo a 1.15.
-- **Trim y punto de remolque.** Con 7–10 kg, el peso domina la aerodinámica:
-  $m g \approx 70$–$104$ N frente a $q S_{ref} C_{N\alpha} \approx 8$ N/rad. Para α_trim ≤ 5° el
-  amarre debe quedar a **±0.4–0.6 mm del CG** con h_tip = 30 y SM = 1, o a ±1–2 mm con
-  h_tip = 40–50, que dejan más SM. Los α_trim del CSV con x_T = 0.15 L (cientos de grados) solo dicen que ese amarre es
-  inviable: fuera del rango lineal no son ángulos físicos. El amarre va en `x_T_trim_cero_mm`
-  (≈ 152–156 mm con tapón trasero) y debe ser **ajustable**.
+- **Trim y punto de remolque.** Con 7–10 kg, el peso domina la aerodinámica: $m g$ ≈ 72–106 N
+  frente a $q S_{ref} C_{N\alpha}$ ≈ 11 N/rad (6.7 a 9.9 veces menos). Por eso el amarre va
+  **en el CG** por defecto (`remolque.x_T: en_CG`), con trim estático 0°. Lo que importa es
+  cuánto error admite su posición:
+  $$|x_{CG}-x_T| \le \frac{\alpha_{max}\,q\,S_{ref}\,C_{N\alpha}\,(x_{CP}-x_{CG})}{m\,g}$$
+  Ese valor es `tol_amarre_mm`, con `alpha_trim_max_deg` = 5°. A 30 m/s sale **±1.24 mm** con plomo
+  y ±0.85 mm con W90 en el diseño 40/40/X, y ±1.96 / ±1.34 mm en 50/40/X. La tolerancia crece con
+  $V^2$ y con el margen $(x_{CP}-x_{CG})$, y cae como $1/m$. El amarre debe ser **ajustable**
+  (riel o perforaciones a ±5 mm de `x_T_trim_cero_mm` ≈ 152–156 mm) y calibrarse pesando el
+  sensor ya armado. Si se fija x_T lejos del CG, `trim_no_lineal` avisa cuando |α| supera
+  `alpha_lineal_max_deg` (15°), porque fuera de ese rango la fórmula lineal no da ángulos físicos.
 - **Cargas:** un sensor de 7–10 kg multiplica las cargas en el cable, el winch, la compuerta y el
   casco de PLA durante el despliegue. Hay que verificarlas contra el presupuesto de masa (v2 §10.4).
 
@@ -196,7 +225,7 @@ Con W90, los mismos diseños dan 10 272 g (30/40) y 10 410 g (cavidad llena).
 | Dato | Valor por defecto | Qué cambia |
 |---|---|---|
 | Electrónica (largo, diámetro, masa, posición) | 100 mm, 150 g, detrás del lastre | ℓ_SM,min, ℓ_geo, x_CG. **Conviene exigir que empiece en el tramo cilíndrico** |
-| Punto de remolque y herraje | x_T = 0.15 L, 15 g en x = 40 mm | trim (`alpha_trim_*`, `x_T_trim_cero_mm`) |
+| Punto de remolque y herraje | x_T en el CG (ajustable), 15 g en x = 40 mm | `tol_amarre_mm`, `alpha_trim_*`, `x_T_trim_cero_mm` |
 | SM_min | 1.0 cal (criterio: máxima masa con SM ≥ 1) | óptimo de masa, ventana, banderas. Conviene agregar margen por incertidumbre del CP |
 | Presupuesto de masa | 250–1500 g | `presupuestos.csv` |
 | Material y espesor de aletas | MAT_PARED_EQ, 1.8 mm | m_aletas, CG en vacío |

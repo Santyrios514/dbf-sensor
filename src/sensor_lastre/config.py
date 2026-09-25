@@ -17,7 +17,7 @@ import yaml
 
 from . import aletas as mod_aletas
 from .atmosfera import isa
-from .materiales import Capa, Relleno, densidad_granular, espesor_total
+from .materiales import Capa, Relleno, costo_granular, densidad_granular, espesor_total
 from .perfiles import FORMAS, radio_superficie
 
 MM = 1e-3
@@ -155,6 +155,8 @@ class Vuelo:
 class Remolque:
     modo: str  # absoluto | en_CG
     x_T: float | None
+    alpha_max: float = math.radians(5.0)  # trim admisible (para la tolerancia del amarre)
+    alpha_lineal: float = math.radians(15.0)  # validez de la fórmula lineal de trim
 
 
 @dataclass(frozen=True)
@@ -305,18 +307,26 @@ def _parametro(forma: str, param: Any, donde: str, errores: list[str]) -> float 
 
 def _rellenos(raw: dict, errores: list[str]) -> tuple[Relleno, ...]:
     mats = raw.get("materiales", {})
+    costos = raw.get("costos_usd_kg") or {}
     out = []
     for i, r in enumerate(raw.get("rellenos", [])):
         d = f"rellenos[{i}] ({r.get('nombre', '?')})"
-        rho = _material(r.get("material", ""), mats, d, errores)
+        mat = r.get("material", "")
+        rho = _material(mat, mats, d, errores)
+        c = float(r.get("costo_usd_kg", costos.get(mat, math.nan)))
         gran = r.get("granular")
         if gran:
             phi = float(gran.get("empaquetamiento", math.nan))
             if not 0 < phi < 1:
                 errores.append(f"{d}: empaquetamiento debe estar en (0, 1) (vale {phi})")
-            rho_m = _material(gran.get("matriz", ""), mats, d + ".matriz", errores)
+            matriz = gran.get("matriz", "")
+            rho_m = _material(matriz, mats, d + ".matriz", errores)
+            c_grano = float(gran.get("costo_grano_usd_kg", costos.get(mat, math.nan)))
+            c = costo_granular(phi, rho, rho_m, c_grano, float(costos.get(matriz, math.nan)))
             rho = densidad_granular(rho, rho_m, phi)
-        out.append(Relleno(nombre=r["nombre"], rho_b=rho))
+        if math.isfinite(c) and c < 0:
+            errores.append(f"{d}: el costo por kg debe ser ≥ 0")
+        out.append(Relleno(nombre=r["nombre"], rho_b=rho, costo_usd_kg=c))
     if not out:
         errores.append("rellenos: la lista está vacía")
     return tuple(out)
@@ -514,11 +524,17 @@ def _resolver_caso(cid: str, L_mm: float, D_mm: float, sec: dict, rellenos, erro
                   mach_regresion_or=None if mr is None else float(mr))
 
     # --- remolque
-    xT = sec["remolque"]["x_T"]
+    rq = sec["remolque"]
+    xT = rq["x_T"]
+    a_max = math.radians(float(rq.get("alpha_trim_max_deg", 5.0)))
+    a_lin = math.radians(float(rq.get("alpha_lineal_max_deg", 15.0)))
+    if not 0 < a_max <= a_lin:
+        errores.append("remolque: se requiere 0 < alpha_trim_max_deg ≤ alpha_lineal_max_deg")
     if xT == "en_CG" or isinstance(xT, dict) and xT.get("modo") == "en_CG":
-        remolque = Remolque(modo="en_CG", x_T=None)
+        remolque = Remolque(modo="en_CG", x_T=None, alpha_max=a_max, alpha_lineal=a_lin)
     else:
-        remolque = Remolque(modo="absoluto", x_T=_longitud(xT, {"D": D, "L": L}, "remolque.x_T", errores))
+        remolque = Remolque(modo="absoluto", x_T=_longitud(xT, {"D": D, "L": L}, "remolque.x_T", errores),
+                            alpha_max=a_max, alpha_lineal=a_lin)
 
     env = sec["envolvente"]
 

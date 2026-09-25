@@ -35,7 +35,7 @@ def salida_sin_orlab(tmp_path_factory):
 def test_esquemas(salida_sin_orlab):
     d = salida_sin_orlab
     for nombre, cols in (("resultados.csv", esquemas.RESULTADOS), ("masas_capas.csv", esquemas.MASAS_CAPAS),
-                         ("optimo.csv", esquemas.OPTIMO),
+                         ("optimo.csv", esquemas.OPTIMO), ("configuraciones.csv", esquemas.CONFIGURACIONES),
                          ("presupuestos.csv", esquemas.PRESUPUESTOS), ("ventanas.csv", esquemas.VENTANAS)):
         assert list(pd.read_csv(d / nombre).columns) == cols, nombre
     curvas = list((d / "curvas").glob("*.csv"))
@@ -59,6 +59,9 @@ def test_cobertura_barrido(salida_sin_orlab):
     assert len(pres) == n * 5
     banderas = {b for s in res["banderas"].fillna("") for b in s.split(";") if b}
     assert banderas <= set(esquemas.BANDERAS)
+    confs = pd.read_csv(salida_sin_orlab / "configuraciones.csv")
+    assert len(confs) == len(cfg.casos) and confs["D_max_aletas_mm"].notna().all()
+    assert (res["costo_relleno_usd"].dropna() >= 0).all()
     capas = pd.read_csv(salida_sin_orlab / "masas_capas.csv")
     m_por_caso = capas.groupby("config_id")["m_g"].sum()
     m_res = res.groupby("config_id")["m_casco_g"].first()

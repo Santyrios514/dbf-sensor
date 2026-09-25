@@ -21,12 +21,22 @@ materiales:                     # densidad en kg/m^3
   acero: 7850
   laton: 8500
 
-rellenos:                       # candidatos a evaluar
+costos_usd_kg:                  # APROXIMADOS (2026, compra minorista de pocos kg, solo material,
+  plomo: 4                      # sin mecanizado, fundición ni envío). Ajustar con cotizaciones reales.
+  tungsteno_aleacion_W90: 150   # barra de aleación pesada W-Ni-Fe; la pieza mecanizada cuesta más
+  tungsteno_puro: 120
+  bismuto: 25
+  acero: 3
+  laton: 10
+  epoxy: 30
+
+rellenos:                       # candidatos a evaluar (costo_usd_kg opcional: sobrescribe costos_usd_kg)
   - {nombre: plomo_macizo,   material: plomo}
   - {nombre: W90_macizo,     material: tungsteno_aleacion_W90}
   - {nombre: bismuto_macizo, material: bismuto}
   - {nombre: acero_macizo,   material: acero}
-  - {nombre: perdigon_pb_epoxy, material: plomo, granular: {empaquetamiento: 0.62, matriz: epoxy}}
+  - {nombre: perdigon_pb_epoxy, material: plomo,
+     granular: {empaquetamiento: 0.62, matriz: epoxy, costo_grano_usd_kg: 6}}   # perdigón > lingote
 
 geometria_base:
   longitud_referencia: cuerpo   # cuerpo | total. "L_mm" del barrido se interpreta así.
@@ -109,8 +119,10 @@ condiciones_vuelo:
   mach: auto                    # auto = V / a(h); un número lo fuerza
   mach_regresion_or: 0.3        # solo para el test de regresión (v2 §1.4)
 
-remolque:                       # PENDIENTE (§10.2)
-  x_T: {modo: relativo_L, valor: 0.15}      # absoluto_mm | relativo_L | en_CG
+remolque:                       # PENDIENTE (§10.2): posición real del herraje
+  x_T: {modo: en_CG}            # en_CG | absoluto_mm | relativo_L. En el CG el trim estático es 0
+  alpha_trim_max_deg: 5.0       # trim admisible → tol_amarre_mm (error permitido de x_T respecto al CG)
+  alpha_lineal_max_deg: 15.0    # por encima, la fórmula lineal de trim no es válida → trim_no_lineal
 
 envolvente:
   largo_max_mm: 340             # v1; el diseño base mide 390 mm con aletas
@@ -168,3 +180,4 @@ salida:
   dir_datos: data
   dir_figuras: figs
   figuras: true
+  relleno_dibujo: plomo_macizo  # relleno que se dibuja en figs/dibujo__*.png

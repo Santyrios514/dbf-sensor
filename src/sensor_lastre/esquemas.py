@@ -19,34 +19,41 @@ OR_COMPONENTES = ["config_id", "componente", "CN_alpha_rad", "x_CP_mm", "m_g", "
 OR_ALETAS = ["config_id", "orden", "x_mm", "r_mm", "origen"]
 
 RESULTADOS = [
-    "config_id", "relleno", "rho_b_kg_m3", "L_mm", "D_mm", "V_ext_cm3", "V_int_cm3", "x_b0_mm",
+    "config_id", "relleno", "rho_b_kg_m3", "costo_usd_kg", "L_mm", "D_mm", "V_ext_cm3", "V_int_cm3", "x_b0_mm",
     "ell_geo_mm", "V_util_geo_cm3", "eta_int_geo", "eta_ext_geo", "m_relleno_geo_g",
     "m_total_geo_g", "x_CG_geo_mm", "SM_geo_cal", "ell_star_mm", "x_CG_min_mm",
     "SM_max_alcanzable_cal", "SM_inf_cal", "margen_SM_inf_cal", "ell_SM_min_mm", "ell_SM_max_mm",
     "V_util_cm3", "eta_int", "eta_ext", "m_relleno_g", "m_relleno_trasero_g",
-    "ell_trasero_mm", "limitante_masa", "m_total_g", "x_CG_mm", "SM_cal", "x_CP_mm",
+    "costo_relleno_usd", "ell_trasero_mm", "limitante_masa", "m_total_g", "x_CG_mm", "SM_cal", "x_CP_mm",
     "x_CP_fuente", "dx_CP_or_vs_interno_mm", "CN_alpha_rad", "x_T_mm", "alpha_trim_geo_deg",
-    "alpha_trim_deg", "x_T_trim_cero_mm", "m_casco_g", "A_aleta_mm2", "m_aletas_g",
+    "alpha_trim_deg", "x_T_trim_cero_mm", "tol_amarre_mm", "m_casco_g", "A_aleta_mm2", "m_aletas_g",
     "x_CG_aletas_mm", "m_mamparos_g", "m_electronica_g", "m_puntuales_g", "dif_masa_or_pct",
-    "L_total_mm", "h_env_mm", "w_env_mm", "cabe_largo", "cabe_alto", "cabe_ancho", "banderas",
+    "L_total_mm", "D_max_aletas_mm", "h_env_mm", "w_env_mm", "cabe_largo", "cabe_alto", "cabe_ancho",
+    "banderas",
 ]
 
 MASAS_CAPAS = ["config_id", "estacion", "capa_idx", "material", "espesor_mm", "fraccion_solida",
                "m_g", "x_cg_mm"]
 
 PRESUPUESTOS = ["config_id", "relleno", "m_lastre_obj_g", "ell_mm", "ell_trasero_mm", "no_cabe", "m_total_g",
-                "x_CG_mm", "SM_cal", "alpha_trim_deg"]
+                "x_CG_mm", "SM_cal", "alpha_trim_deg", "costo_usd"]
 
 CURVA = ["ell_mm", "V_b_cm3", "m_b_g", "m_total_g", "x_CG_mm", "SM_cal", "alpha_trim_deg"]
 
 # Ranking por el criterio de optimización: máxima masa de lastre con SM ≥ SM_min.
-OPTIMO = ["relleno", "puesto", "config_id", "m_relleno_g", "m_relleno_trasero_g", "m_total_g", "SM_cal",
-          "limitante_masa", "ell_SM_max_mm", "ell_trasero_mm", "x_CG_mm", "x_CP_mm", "x_T_trim_cero_mm",
-          "alpha_trim_deg", "h_env_mm", "w_env_mm", "L_total_mm", "cabe_alto", "cabe_ancho", "cabe_largo"]
+OPTIMO = ["relleno", "puesto", "config_id", "m_relleno_g", "m_relleno_trasero_g", "costo_usd_kg",
+          "costo_relleno_usd", "m_total_g", "SM_cal", "limitante_masa", "ell_SM_max_mm", "ell_trasero_mm",
+          "x_CG_mm", "x_CP_mm", "x_T_trim_cero_mm", "tol_amarre_mm", "alpha_trim_deg", "D_max_aletas_mm",
+          "h_env_mm", "w_env_mm", "L_total_mm", "cabe_alto", "cabe_ancho", "cabe_largo"]
+
+# Una fila por configuración: dimensiones exteriores (con aletas) y dibujo.
+CONFIGURACIONES = ["config_id", "L_mm", "L_total_mm", "D_mm", "D_max_aletas_mm", "h_env_mm", "w_env_mm",
+                   "aletas_n", "aleta_h_tip_mm", "aleta_extension_mm", "aleta_rotacion_deg", "r_tip_mm",
+                   "x_CP_mm", "x_CP_fuente", "dibujo"]
 
 # Complemento (no contractual): todos los intervalos de ℓ que cumplen el SM, útil cuando
 # x_CG(ℓ) no es unimodal o la ventana está partida.
 VENTANAS = ["config_id", "relleno", "desde_mm", "hasta_mm"]
 
 BANDERAS = ("inviable_geo", "SM_inalcanzable", "SM_inalcanzable_por_geometria", "margen_SM_bajo",
-            "no_unimodal", "inestable_respecto_remolque", "dif_CP_alta", "dif_masa_alta")
+            "no_unimodal", "inestable_respecto_remolque", "trim_no_lineal", "dif_CP_alta", "dif_masa_alta")

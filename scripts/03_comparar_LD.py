@@ -84,6 +84,12 @@ def comparar(res: pd.DataFrame, exigir) -> pd.DataFrame:
     return out.reindex(columns=COLUMNAS)
 
 
+def _largo(v) -> str:
+    """Marca de largo de bahía (cabe_largo no se exige: solo se informa)."""
+    t = str(v).lower()
+    return " ✓" if t in ("true", "1") else " ✗" if t in ("false", "0") else ""
+
+
 def _figura(res: pd.DataFrame, comp: pd.DataFrame, relleno: str, exigir, alto_max, ruta: Path):
     import matplotlib
     matplotlib.use("Agg")
@@ -93,7 +99,7 @@ def _figura(res: pd.DataFrame, comp: pd.DataFrame, relleno: str, exigir, alto_ma
     Ls, Ds = sorted(c["L_mm"].unique()), sorted(c["D_mm"].unique())
     M = c.pivot(index="L_mm", columns="D_mm", values="m_relleno_max_g").reindex(index=Ls, columns=Ds) / 1000
 
-    fig, (a1, a2) = plt.subplots(1, 2, figsize=(13, 5.2), gridspec_kw={"width_ratios": [1, 1.3]})
+    fig, (a1, a2) = plt.subplots(1, 2, figsize=(13, 6), gridspec_kw={"width_ratios": [1, 1.3]})
     im = a1.imshow(M.to_numpy(), cmap="Blues", origin="lower", aspect="auto")
     a1.set_xticks(range(len(Ds)), [f"{d:g}" for d in Ds])
     a1.set_yticks(range(len(Ls)), [f"{l:g}" for l in Ls])
@@ -106,7 +112,8 @@ def _figura(res: pd.DataFrame, comp: pd.DataFrame, relleno: str, exigir, alto_ma
             f = c[(c["L_mm"] == L) & (c["D_mm"] == D)].iloc[0]
             if np.isfinite(f["m_relleno_max_g"]):
                 txt = (f"{f['m_relleno_max_g'] / 1000:.2f} kg\nSM {f['SM_cal']:.2f}\n"
-                       f"D_ac {f['D_acostado_mm']:.0f} mm\n{f['n_factibles']}/{f['n_variantes']} fact.")
+                       f"D_ac {f['D_acostado_mm']:.0f} mm\n{f['n_factibles']}/{f['n_variantes']} fact.\n"
+                       f"L_tot {f['L_total_mm']:.0f} mm{_largo(f['cabe_largo'])}")
             else:
                 txt = f"sin factibles\n0/{f['n_variantes']}"
             oscuro = np.isfinite(f["m_relleno_max_g"]) and f["m_relleno_max_g"] / 1000 > 0.6 * vmax
@@ -134,7 +141,7 @@ def _figura(res: pd.DataFrame, comp: pd.DataFrame, relleno: str, exigir, alto_ma
     a2.set_ylabel("Masa de lastre con SM ≥ SM_min [kg]")
     a2.set_title("Variantes de aletas factibles (color = L, marcador = D)", fontsize=10)
     a2.grid(alpha=0.25)
-    a2.legend(fontsize=7, ncol=3, loc="best", frameon=False)
+    a2.legend(fontsize=7, ncol=3, loc="upper center", bbox_to_anchor=(0.5, -0.13), frameon=False)
     fig.tight_layout()
     ruta.parent.mkdir(parents=True, exist_ok=True)
     fig.savefig(ruta, dpi=130)

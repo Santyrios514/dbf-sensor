@@ -9,6 +9,7 @@ import numpy as np
 import pandas as pd
 from scipy.optimize import brentq
 
+from . import G0
 from .aletas import envolvente
 from .barrowman import ResultadoCP, cp_interno
 from .config import Caso
@@ -90,6 +91,17 @@ def banderas_envolvente(caso: Caso) -> dict:
             "h_env_mm": h_env / MM, "w_env_mm": w_env / MM,
             "cabe_largo": cabe(g.L_total, env.largo_max), "cabe_alto": cabe(h_env, env.alto_max),
             "cabe_ancho": cabe(w_env, env.ancho_max)}
+
+
+def tolerancia_amarre(m: float, x_CG: float, x_CP: float, q: float, S_ref: float, CNa: float,
+                      alpha_max: float) -> float:
+    """Error admisible |x_CG − x_T| para que |α_trim| ≤ α_max con el amarre cerca del CG.
+
+    De α ≈ m g (x_CG − x_T) / (q S C_Nα (x_CP − x_T)) con x_T ≈ x_CG en el brazo:
+        |x_CG − x_T| ≤ α_max q S C_Nα (x_CP − x_CG) / (m g)
+    """
+    brazo = x_CP - x_CG
+    return alpha_max * q * S_ref * CNa * brazo / (m * G0) if brazo > 0 else math.nan
 
 
 def _txt(banderas: list[str]) -> str:
@@ -234,13 +246,18 @@ def _analizar_relleno(res: ResultadoCaso, rel: Relleno) -> ResultadoRelleno:
                 limitante = "SM" if ell2 < mod.ell2_max(ell_u) - nu.tol else "geometria"
             else:
                 limitante = "geometria"
+            alpha_u = float(np.degrees(alpha_trim(m_u, xcg_u, x_T_de(xcg_u), x_CP, vu.q, S_ref, CNa)))
+            if not (abs(alpha_u) <= np.degrees(caso.remolque.alpha_lineal)):  # también NaN
+                banderas.append("trim_no_lineal")
             fila.update({
                 "V_util_cm3": Vu / CM3, "eta_int": Vu / V_int, "eta_ext": Vu / V_ext,
                 "m_relleno_g": rel.rho_b * Vu / G, "m_total_g": m_u / G,
                 "x_CG_mm": xcg_u / MM, "SM_cal": SM(xcg_u), "x_T_mm": x_T_de(xcg_u) / MM,
-                "alpha_trim_deg": float(np.degrees(alpha_trim(m_u, xcg_u, x_T_de(xcg_u), x_CP, vu.q,
-                                                              S_ref, CNa))),
-                "x_T_trim_cero_mm": xcg_u / MM, "ell_trasero_mm": ell2 / MM,
+                "alpha_trim_deg": alpha_u,
+                "x_T_trim_cero_mm": xcg_u / MM,
+                "tol_amarre_mm": tolerancia_amarre(m_u, xcg_u, x_CP, vu.q, S_ref, CNa,
+                                                   caso.remolque.alpha_max) / MM,
+                "ell_trasero_mm": ell2 / MM,
                 "costo_relleno_usd": rel.rho_b * Vu * rel.costo_usd_kg,
                 "m_relleno_trasero_g": rel.rho_b * V2 / G, "limitante_masa": limitante,
             })

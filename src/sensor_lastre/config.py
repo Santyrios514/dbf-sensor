@@ -155,6 +155,8 @@ class Vuelo:
 class Remolque:
     modo: str  # absoluto | en_CG
     x_T: float | None
+    alpha_max: float = math.radians(5.0)  # trim admisible (para la tolerancia del amarre)
+    alpha_lineal: float = math.radians(15.0)  # validez de la fórmula lineal de trim
 
 
 @dataclass(frozen=True)
@@ -522,11 +524,17 @@ def _resolver_caso(cid: str, L_mm: float, D_mm: float, sec: dict, rellenos, erro
                   mach_regresion_or=None if mr is None else float(mr))
 
     # --- remolque
-    xT = sec["remolque"]["x_T"]
+    rq = sec["remolque"]
+    xT = rq["x_T"]
+    a_max = math.radians(float(rq.get("alpha_trim_max_deg", 5.0)))
+    a_lin = math.radians(float(rq.get("alpha_lineal_max_deg", 15.0)))
+    if not 0 < a_max <= a_lin:
+        errores.append("remolque: se requiere 0 < alpha_trim_max_deg ≤ alpha_lineal_max_deg")
     if xT == "en_CG" or isinstance(xT, dict) and xT.get("modo") == "en_CG":
-        remolque = Remolque(modo="en_CG", x_T=None)
+        remolque = Remolque(modo="en_CG", x_T=None, alpha_max=a_max, alpha_lineal=a_lin)
     else:
-        remolque = Remolque(modo="absoluto", x_T=_longitud(xT, {"D": D, "L": L}, "remolque.x_T", errores))
+        remolque = Remolque(modo="absoluto", x_T=_longitud(xT, {"D": D, "L": L}, "remolque.x_T", errores),
+                            alpha_max=a_max, alpha_lineal=a_lin)
 
     env = sec["envolvente"]
 

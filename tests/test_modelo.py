@@ -401,3 +401,49 @@ def test_dibujo(raw, tmp_path):
     ruta = tmp_path / "dibujo.png"
     fig_dibujo(res, res.rellenos[0], ruta)
     assert ruta.stat().st_size > 20_000
+
+
+# --------------------------------------------------------------------------- amarre y trim
+
+
+def _caso_recomendado(raw, **remolque):
+    raw["geometria_base"]["aletas"].update(rotacion_deg=45)
+    raw["geometria_base"]["aletas"]["h_tip"]["valor"] = 40
+    raw["remolque"].update(remolque)
+    cfg = cargar(solo(raw, 350, 65))
+    return cfg.casos[0], cfg.rellenos[0]
+
+
+def test_amarre_en_CG_por_defecto(raw):
+    caso, plomo = _caso_recomendado(raw)
+    assert caso.remolque.modo == "en_CG"
+    f = analizar_caso(caso, rellenos=[plomo]).rellenos[0].fila
+    assert f["alpha_trim_deg"] == pytest.approx(0.0, abs=1e-9)
+    assert "trim_no_lineal" not in f["banderas"]
+
+
+def test_tolerancia_amarre(raw):
+    from sensor_lastre import G0
+    caso, plomo = _caso_recomendado(raw)
+    f = analizar_caso(caso, rellenos=[plomo]).rellenos[0].fila
+    m, xcg, xcp = f["m_total_g"] * 1e-3, f["x_CG_mm"] * MM, f["x_CP_mm"] * MM
+    S, q = math.pi * caso.geom.D**2 / 4, caso.vuelo.q
+    tol = math.radians(5) * q * S * f["CN_alpha_rad"] * (xcp - xcg) / (m * G0)
+    assert f["tol_amarre_mm"] == pytest.approx(tol / MM, rel=1e-9)
+    # consistencia: un error de x_T igual a la tolerancia da ≈ 5° de trim
+    a = math.degrees(alpha_trim(m, xcg, xcg - tol, xcp, q, S, f["CN_alpha_rad"]))
+    assert a == pytest.approx(5.0, rel=0.02)
+    assert 0.5 < f["tol_amarre_mm"] < 3  # del orden del mm con ~7 kg a 30 m/s
+
+
+def test_trim_no_lineal(raw):
+    caso, plomo = _caso_recomendado(raw, x_T={"modo": "relativo_L", "valor": 0.15})
+    f = analizar_caso(caso, rellenos=[plomo]).rellenos[0].fila
+    assert abs(f["alpha_trim_deg"]) > 15 and "trim_no_lineal" in f["banderas"]
+
+
+def test_validacion_alphas_remolque(raw):
+    from sensor_lastre.config import ConfigError
+    raw["remolque"].update(alpha_trim_max_deg=20, alpha_lineal_max_deg=15)
+    with pytest.raises(ConfigError, match="alpha_trim_max_deg"):
+        cargar(solo(raw, 350, 65))

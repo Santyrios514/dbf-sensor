@@ -119,8 +119,10 @@ condiciones_vuelo:
   mach: auto                    # auto = V / a(h); un número lo fuerza
   mach_regresion_or: 0.3        # solo para el test de regresión (v2 §1.4)
 
-remolque:                       # PENDIENTE (§10.2)
-  x_T: {modo: relativo_L, valor: 0.15}      # absoluto_mm | relativo_L | en_CG
+remolque:                       # PENDIENTE (§10.2): posición real del herraje
+  x_T: {modo: en_CG}            # en_CG | absoluto_mm | relativo_L. En el CG el trim estático es 0
+  alpha_trim_max_deg: 5.0       # trim admisible → tol_amarre_mm (error permitido de x_T respecto al CG)
+  alpha_lineal_max_deg: 15.0    # por encima, la fórmula lineal de trim no es válida → trim_no_lineal
 
 envolvente:
   largo_max_mm: 340             # v1; el diseño base mide 390 mm con aletas

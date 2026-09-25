@@ -11,7 +11,6 @@ matplotlib.use("Agg")
 import matplotlib.pyplot as plt  # noqa: E402
 import numpy as np  # noqa: E402
 import pandas as pd  # noqa: E402
-from matplotlib.colors import LinearSegmentedColormap  # noqa: E402
 
 from .analisis import ResultadoCaso, ResultadoRelleno  # noqa: E402
 from .config import ESTACIONES  # noqa: E402
@@ -21,8 +20,6 @@ MM = 1e-3
 # Paleta de referencia (categórica en orden fijo + rampa secuencial azul)
 AZUL, NARANJA, AQUA, AMARILLO = "#2a78d6", "#eb6834", "#1baf7a", "#eda100"
 TINTA, TINTA2, REJILLA, SUPERFICIE = "#0b0b0b", "#52514e", "#e4e3df", "#fcfcfb"
-SECUENCIAL = LinearSegmentedColormap.from_list(
-    "azul", ["#cde2fb", "#9ec5f4", "#6da7ec", "#3987e5", "#256abf", "#184f95", "#0d366b"])
 CAPAS = ["#eda100", "#f5b89c", "#a8dfc7", "#e87ba4"]
 
 plt.rcParams.update({
@@ -166,8 +163,10 @@ def fig_barrido(resultados: pd.DataFrame, valores: pd.DataFrame, rutas: list[str
                 if ps and len(g):
                     ult = g.iloc[-1]
                     if np.isfinite(ult[col]):
+                        # desfase vertical por serie: evita que etiquetas de puntos iguales se encimen
                         ax.annotate(f"{_etiqueta(ps)} = {val:g}", (ult[px], ult[col]),
-                                    textcoords="offset points", xytext=(6, 0), va="center", color=TINTA2)
+                                    textcoords="offset points", xytext=(6, 11 * k - 11), va="center",
+                                    color=TINTA2)
             if ref is not None:
                 ax.axhline(ref, color=TINTA2, lw=1.2, ls=":")
                 ax.annotate(f"SM_min = {ref:g}", (d[px].min(), ref), textcoords="offset points",

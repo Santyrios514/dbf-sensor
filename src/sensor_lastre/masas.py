@@ -6,7 +6,8 @@ from dataclasses import dataclass, field
 
 import numpy as np
 
-from .config import ESTACIONES, Aletas, Caso
+from .aletas import GeomAleta
+from .config import ESTACIONES, Caso
 from .geometria import Cavidad, integrar
 
 
@@ -71,15 +72,20 @@ def masas_capas(caso: Caso, cav: Cavidad) -> list[MasaCapa]:
     return out
 
 
-def masa_aletas(a: Aletas) -> tuple[float, float]:
-    """(m_f, x̄_f) de n aletas trapezoidales."""
-    m = a.n * a.rho * a.phi * a.tf * a.s * (a.cr + a.ct) / 2.0
-    return m, centroide_aleta(a.cr, a.ct, a.xs, a.x_r0)
+def masa_aletas(a: GeomAleta) -> tuple[float, float]:
+    """(m_f, x̄_f) de las n aletas freeform: m_f = n ρ_f φ_f t_f A_f (v2 §3.4)."""
+    return a.masa, a.x_cg
 
 
-def centroide_aleta(cr: float, ct: float, xs: float, x_r0: float = 0.0) -> float:
-    """x̄ del área de una aleta trapezoidal (flecha x_s del borde de ataque)."""
-    return x_r0 + (cr**2 + cr * ct + ct**2 + xs * (cr + 2 * ct)) / (3.0 * (cr + ct))
+def masas_por_componente(caso: Caso, mv: "MasaVacia") -> dict[str, tuple[float, float]]:
+    """{componente: (m, x_CG)} con los mismos cortes que OpenRocket (nariz, cuerpo, cola, aletas)."""
+    out = {}
+    for s in ESTACIONES:
+        cs = [c for c in mv.capas if c.estacion == s]
+        m = sum(c.m for c in cs)
+        out[s] = (m, sum(c.M for c in cs) / m if m > 0 else float("nan"))
+    out["aletas"] = (mv.m_aletas, mv.x_aletas)
+    return out
 
 
 def masa_vacia(caso: Caso, cav: Cavidad) -> MasaVacia:

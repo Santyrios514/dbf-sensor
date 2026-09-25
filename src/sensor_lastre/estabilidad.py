@@ -89,6 +89,15 @@ class ModeloLastre:
     def m_b(self, ell):
         return self.rho_b * self.V_b(ell)
 
+    def xbar_b(self, ell):
+        """Centroide del lastre, x̄_b(ℓ) = Φ_1/∀_b."""
+        return self.Phi1(ell) / self.V_b(ell)
+
+    def SM_inf(self, ell, x_CP: float, D_ref: float):
+        """Techo por geometría para una región de lastre dada (v2 §3.6): el SM al que tiende
+        SM(ℓ) cuando ρ_b → ∞ con la misma región, (x_CP − x̄_b(ℓ))/D."""
+        return (x_CP - self.xbar_b(ell)) / D_ref
+
     def x_e(self, ell):
         el = self.caso.electronica
         ell = np.asarray(ell, dtype=float)

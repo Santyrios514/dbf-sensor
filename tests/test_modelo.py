@@ -5,16 +5,24 @@ import math
 import numpy as np
 import pytest
 
-from sensor_lastre.analisis import analizar_caso
-from sensor_lastre.barrowman import aletas, cp_interno
+from sensor_lastre import aletas as mod_aletas
+from sensor_lastre.analisis import Tolerancias, analizar_caso
+from sensor_lastre.barrowman import cuerpo_revolucion
 from sensor_lastre.config import cargar
-from sensor_lastre.estabilidad import alpha_trim
+from sensor_lastre.estabilidad import ModeloLastre, alpha_trim
 from sensor_lastre.geometria import malla
 from sensor_lastre.perfiles import radio_exterior, radio_nariz
 
-from conftest import solo
+from conftest import barrido, solo
 
 MM = 1e-3
+
+
+def _aletas_efectivas(raw):
+    """Aletas del barrido que sí permiten SM = 1.5 (h_tip = 30, extensión = 40)."""
+    raw["geometria_base"]["aletas"]["h_tip"]["valor"] = 30
+    raw["geometria_base"]["aletas"]["extension"]["valor"] = 40
+    return raw
 
 
 def _caso_cilindro(raw, modo_e="detras_del_lastre"):
@@ -65,7 +73,7 @@ def test_monotonia_e_inversion(raw):
 
 
 def test_ventana_toca_SM_min(raw):
-    cfg = cargar(solo(raw, 350, 65))
+    cfg = cargar(solo(_aletas_efectivas(raw), 350, 65))
     caso = cfg.casos[0]
     rr = analizar_caso(caso, rellenos=[cfg.rellenos[0]]).rellenos[0]
     v, mod = rr.ventana, rr.modelo
@@ -80,7 +88,7 @@ def test_ventana_toca_SM_min(raw):
 
 def test_SM_max_acota_la_ventana(raw):
     raw["estabilidad"]["SM_max_cal"] = 1.7
-    cfg = cargar(solo(raw, 350, 65))
+    cfg = cargar(solo(_aletas_efectivas(raw), 350, 65))
     rr = analizar_caso(cfg.casos[0], rellenos=[cfg.rellenos[0]]).rellenos[0]
     sm = rr.curva["SM_cal"].to_numpy()
     assert sm.max() > 1.7  # la restricción está activa
@@ -113,7 +121,7 @@ def test_regresion_chat(raw, cid, ref, hol):
     raw["lastre"].update(x_inicio={"modo": "absoluto_mm", "valor": 0}, fraccion_max_L=None,
                          margen_cola_mm=0)
     raw["electronica"].update(longitud_mm=100, masa_g=150, modo="detras_del_lastre", holgura_mm=hol)
-    cfg = cargar(raw)
+    cfg = cargar(barrido(raw, [270, 350, 400], [60, 65, 70]))
     fila = analizar_caso(cfg.caso(cid), rellenos=[cfg.rellenos[0]]).rellenos[0].fila
     assert fila["V_util_geo_cm3"] == pytest.approx(ref, rel=0.05)
 
@@ -128,7 +136,7 @@ def test_kn_nariz(raw, forma, p, kn):
     raw["geometria_base"]["nariz"].update(forma=forma, parametro=p)
     g = cargar(solo(raw, 350, 65)).casos[0].geom
     x = malla(g.L, 0.1 * MM)
-    nariz = cp_interno(g, x, radio_exterior(x, g)).partes[0]
+    nariz = cuerpo_revolucion(x, radio_exterior(x, g), 0.0, g.nariz.Ln, np.pi * g.R**2, "nariz")
     assert nariz.CNa == pytest.approx(2.0, rel=1e-9)
     assert nariz.x / g.nariz.Ln == pytest.approx(kn, rel=1e-3)
 
@@ -142,31 +150,33 @@ def test_ogiva_esbelta_kn():
     assert kn == pytest.approx(0.466, abs=2e-3)
 
 
-def test_cola_conica_barrowman(raw):
-    g = cargar(solo(raw, 350, 65)).casos[0].geom
-    x = malla(g.L, 0.1 * MM)
-    cola = cp_interno(g, x, radio_exterior(x, g)).partes[1]
-    k = (2 * g.cola.Ra) / g.D
-    assert cola.CNa == pytest.approx(2 * (k**2 - 1), rel=1e-9)
-    dF_dR = 1 / k  # Barrowman usa delantero/trasero
-    x_ref = g.x_cola + g.cola.Lt / 3 * (1 + (1 - dF_dR) / (1 - dF_dR**2))
-    assert cola.x == pytest.approx(x_ref, abs=0.01 * MM)
+def test_freeform_trapezoidal_igual_a_barrowman_clasico():
+    """Una aleta trapezoidal sobre un cilindro, pasada por el método de franjas, reproduce las
+    fórmulas cerradas de Barrowman (C_Nα y x_CP en el cuarto de la cuerda media)."""
+    n, cr, ct, s, xs, R, x0 = 4, 60 * MM, 30 * MM, 50 * MM, 30 * MM, 30 * MM, 100 * MM
+    P = np.array([[x0, R], [x0 + xs, R + s], [x0 + xs + ct, R + s], [x0 + cr, R]])
+    p = mod_aletas.ParamsAleta(n=n, rotacion=0, c_r=cr, x_s=xs, h=s, r_tip_obj=None, e=0, r_in=0,
+                               delta_b=0, eps=0, t=2 * MM, material="PLA", rho=1240, phi=1)
+    g = mod_aletas.GeomAleta(params=p, x_LE=x0, r_LE=R, R_a=R, h=s, puntos=P - [x0, R], poligono=P,
+                             origen=("punto",) * 4)
+    c = mod_aletas.barrowman_freeform(g, np.pi * R**2, 0.0, 481)
+    D = 2 * R
+    lm = np.hypot(s, xs + ct / 2 - cr / 2)
+    CNa = (1 + R / (s + R)) * (4 * n * (s / D) ** 2) / (1 + np.sqrt(1 + (2 * lm / (cr + ct)) ** 2))
+    xf = x0 + xs * (cr + 2 * ct) / (3 * (cr + ct)) + (cr + ct - cr * ct / (cr + ct)) / 6
+    assert c.CNa == pytest.approx(CNa, rel=1e-4)
+    assert c.x_CP == pytest.approx(xf, abs=0.01 * MM)
 
 
-def test_aletas_barrowman_referencia():
-    """Caso de mano: 4 aletas, cr = 60, ct = 30, s = 50, x_s = 30, D = 60 (mm)."""
-    from dataclasses import replace
-    from sensor_lastre.config import Aletas, Cola, Geometria, Nariz
-    a = Aletas(n=4, cr=60 * MM, ct=30 * MM, s=50 * MM, xs=30 * MM, tf=2 * MM, material="PLA",
-               rho=1240, phi=1, x_r0=100 * MM)
-    g = Geometria(L=200 * MM, D=60 * MM, nariz=Nariz("conica", None, 60 * MM),
-                  cola=Cola("conica", 0.0, 30 * MM, True), aletas=a)
-    c = aletas(g)
-    lm = math.hypot(50, 30 + 15 - 30)
-    CNa = (1 + 30 / 80) * (4 * 4 * (50 / 60) ** 2) / (1 + math.sqrt(1 + (2 * lm / 90) ** 2))
-    xf = 100 + 30 * (60 + 60) / (3 * 90) + (90 - 1800 / 90) / 6
-    assert c.CNa == pytest.approx(CNa, rel=1e-12)
-    assert c.x / MM == pytest.approx(xf, rel=1e-12)
+def test_barrowman_interno_vs_openrocket_base(raw):
+    """Aletas del .ork: OpenRocket 24.12 da C_Nα = 2.638 y x_CP = 342.41 mm (M = 0.3, medido con
+    el jar); el método interno queda dentro de 3 % y 2 mm."""
+    raw["condiciones_vuelo"]["mach"] = 0.3
+    caso = cargar(raw).caso("base_ork")
+    c = mod_aletas.barrowman_freeform(caso.geom.aletas, np.pi * caso.geom.R**2, 0.3, 48)
+    assert c.CNa == pytest.approx(2.638, rel=0.03)
+    assert c.x_CP / MM == pytest.approx(342.41, abs=2.0)
+    assert c.span / MM == pytest.approx(31.24, abs=0.01)  # como FinSet.getSpan()
 
 
 # --------------------------------------------------------------------------- trim
@@ -174,7 +184,7 @@ def test_aletas_barrowman_referencia():
 
 def test_trim_en_CG_es_cero(raw):
     raw["remolque"]["x_T"] = {"modo": "en_CG"}
-    cfg = cargar(solo(raw, 270, 60))
+    cfg = cargar(solo(_aletas_efectivas(raw), 270, 60))
     rr = analizar_caso(cfg.casos[0], rellenos=[cfg.rellenos[0]]).rellenos[0]
     assert np.allclose(rr.curva["alpha_trim_deg"], 0.0)
     assert rr.fila["x_T_mm"] == pytest.approx(rr.fila["x_CG_mm"])
@@ -192,11 +202,63 @@ def test_trim_signo_y_remolque_detras_del_CP(raw):
 
 
 def test_envolvente(raw):
+    rr = analizar_caso(cargar(raw).caso("base_ork"), rellenos=[cargar(raw).rellenos[0]]).rellenos[0]
+    f = rr.fila
+    assert f["L_total_mm"] == pytest.approx(390.0, abs=0.01)
+    assert f["cabe_largo"] is False  # 390 > 340 mm
+    assert f["h_env_mm"] == pytest.approx(101.48, abs=0.01) and f["cabe_alto"] is True
+    assert f["cabe_ancho"] is None  # ancho de la bahía pendiente
+
+
+# --------------------------------------------------------------------------- SM_∞ y banderas v2
+
+
+def test_SM_inf_limite_masa_infinita(raw):
+    caso = cargar(solo(_aletas_efectivas(raw), 350, 65)).casos[0]
+    rr = analizar_caso(caso, rellenos=[cargar(raw).rellenos[0]]).rellenos[0]
+    mod, x_CP, D = rr.modelo, rr.fila["x_CP_mm"] * MM, caso.geom.D
+    for ell in (20 * MM, rr.ventana.ell_star, 120 * MM):
+        m0 = float(mod.m(ell) - mod.m_b(ell))
+        rho = 1e4 * m0 / float(mod.V_b(ell))
+        pesado = ModeloLastre(caso=caso, cav=mod.cav, mv=mod.mv, x_b0=mod.x_b0, rho_b=rho)
+        SM = (x_CP - float(pesado.x_CG(ell))) / D
+        assert abs(SM - float(pesado.SM_inf(ell, x_CP, D))) < 0.01
+
+
+def test_SM_descomposicion_exacta(raw):
+    """SM(ℓ) = SM_∞(ℓ) − m_0/(m_0 + m_b)·(x_0 − x̄_b)/D con masa finita (v2 §3.6)."""
+    caso = cargar(solo(_aletas_efectivas(raw), 350, 65)).casos[0]
+    mod = analizar_caso(caso, rellenos=[cargar(raw).rellenos[0]]).rellenos[0].modelo
+    x_CP, D, ell = 0.2, caso.geom.D, 60 * MM
+    mb = float(mod.m_b(ell))
+    m0 = float(mod.m(ell)) - mb
+    x0 = (float(mod.x_CG(ell)) * float(mod.m(ell)) - mb * float(mod.xbar_b(ell))) / m0
+    SM = (x_CP - float(mod.x_CG(ell))) / D
+    rhs = float(mod.SM_inf(ell, x_CP, D)) - m0 / (m0 + mb) * (x0 - float(mod.xbar_b(ell))) / D
+    assert SM == pytest.approx(rhs, abs=1e-12)
+
+
+def test_banderas_por_geometria_y_margen(raw):
     cfg = cargar(raw)
-    rr = analizar_caso(cfg.caso("L270_D60"), rellenos=[cfg.rellenos[0]]).rellenos[0]
-    assert rr.fila["cabe_largo"] is True
-    assert rr.fila["cabe_diametro"] is False  # 60 + 2·48 = 156 > 122
-    raw["geometria_base"]["aletas"]["semienvergadura"] = {"modo": "absoluto_mm", "valor": 30}
+    plomo = cfg.rellenos[0]
+    f = analizar_caso(cfg.caso("L350_D65_h_tip20_extension0"), rellenos=[plomo]).rellenos[0].fila
+    assert "SM_inalcanzable_por_geometria" in f["banderas"]
+    assert math.isnan(f["ell_SM_min_mm"]) and math.isnan(f["ell_SM_max_mm"])
+    assert f["V_util_geo_cm3"] > 0  # las columnas geométricas sí se escriben
+    f = analizar_caso(cfg.caso("base_ork"), rellenos=[plomo]).rellenos[0].fila
+    assert "margen_SM_bajo" in f["banderas"] and "SM_inalcanzable_por_geometria" not in f["banderas"]
+    assert f["SM_inf_cal"] == pytest.approx(1.78, abs=0.05)
+    f = analizar_caso(cfg.caso("L350_D65_h_tip30_extension40"), rellenos=[plomo]).rellenos[0].fila
+    assert not ({"margen_SM_bajo", "SM_inalcanzable"} & set(f["banderas"].split(";")))
+
+
+def test_dif_masa_alta(raw):
     cfg = cargar(raw)
-    rr = analizar_caso(cfg.caso("L350_D60"), rellenos=[cfg.rellenos[0]]).rellenos[0]
-    assert rr.fila["cabe_largo"] is False and rr.fila["cabe_diametro"] is True
+    caso = cfg.caso("base_ork")
+    ok = {"nariz": 26.0144e-3, "cuerpo": 105.5151e-3, "cola": 27.4883e-3, "aletas": 25.317e-3}  # OR 24.12
+    res = analizar_caso(caso, rellenos=[cfg.rellenos[0]], masas_or=ok, tol=Tolerancias.desde(cfg.verificacion))
+    assert "dif_masa_alta" not in res.banderas
+    assert abs(res.dif_masa_total) < 0.01
+    malo = dict(ok, cola=2 * ok["cola"])  # p. ej. transición marcada Filled en el .ork
+    res = analizar_caso(caso, rellenos=[cfg.rellenos[0]], masas_or=malo, tol=Tolerancias.desde(cfg.verificacion))
+    assert "dif_masa_alta" in res.banderas

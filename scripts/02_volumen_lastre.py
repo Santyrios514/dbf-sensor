@@ -2,7 +2,8 @@
 """Script 2: volumen utilizable, masa de lastre, CG, SM, ventana de ℓ y trim por configuración.
 
     python scripts/02_volumen_lastre.py --config config/config.yaml \
-        [--or-resumen data/or_resumen.csv --or-perfiles data/or_perfiles.csv | --sin-orlab] \
+        [--or-resumen data/or_resumen.csv --or-perfiles data/or_perfiles.csv \
+         --or-aletas data/or_aletas.csv --or-componentes data/or_componentes.csv | --sin-orlab] \
         [--rellenos plomo_macizo,W90_macizo] [--sin-figuras]
 """
 
@@ -18,8 +19,9 @@ sys.path.insert(0, str(RAIZ / "src"))
 
 import pandas as pd  # noqa: E402
 
+from sensor_lastre import aletas as mod_aletas  # noqa: E402
 from sensor_lastre import esquemas  # noqa: E402
-from sensor_lastre.analisis import AeroOR, analizar_caso  # noqa: E402
+from sensor_lastre.analisis import AeroOR, Tolerancias, analizar_caso  # noqa: E402
 from sensor_lastre.config import ConfigError, cargar  # noqa: E402
 
 MM = 1e-3
@@ -30,6 +32,8 @@ def _args(argv=None):
     p.add_argument("--config", default=str(RAIZ / "config" / "config.yaml"))
     p.add_argument("--or-resumen")
     p.add_argument("--or-perfiles")
+    p.add_argument("--or-aletas")
+    p.add_argument("--or-componentes")
     p.add_argument("--sin-orlab", action="store_true", help="perfiles analíticos + Barrowman interno")
     p.add_argument("--rellenos", help="lista separada por comas (por defecto, todos)")
     p.add_argument("--solo", help="ids de configuración separados por comas")
@@ -48,6 +52,19 @@ def _escribir(df: pd.DataFrame, columnas: list[str], ruta: Path):
     df = df.reindex(columns=columnas)
     ruta.parent.mkdir(parents=True, exist_ok=True)
     df.to_csv(ruta, index=False, float_format="%.6g")
+
+
+def _aletas_or(caso, fila_res, pol: pd.DataFrame):
+    """Sustituye la aleta analítica por el polígono que OpenRocket aceptó (or_aletas.csv)."""
+    if pol.empty:
+        return caso
+    pol = pol.sort_values("orden")
+    P = pol[["x_mm", "r_mm"]].to_numpy() * MM
+    g = mod_aletas.desde_poligono(caso.params_aleta, P, list(pol["origen"]),
+                                  x_LE=float(fila_res["aletas_x_r0_mm"]) * MM,
+                                  r_LE=float(fila_res["r_LE_mm"]) * MM,
+                                  R_a=float(fila_res["D_popa_mm"]) * MM / 2)
+    return caso.con_aletas(g)
 
 
 def main(argv=None) -> int:
@@ -75,33 +92,40 @@ def main(argv=None) -> int:
         ids = [s.strip() for s in a.solo.split(",")]
         casos = [c for c in casos if c.id in ids]
 
-    or_res = or_perf = None
+    or_res = or_perf = or_ale = or_comp = None
     if not a.sin_orlab:
-        r_path = Path(a.or_resumen) if a.or_resumen else dir_datos / "or_resumen.csv"
-        p_path = Path(a.or_perfiles) if a.or_perfiles else dir_datos / "or_perfiles.csv"
-        if not (r_path.exists() and p_path.exists()):
-            print(f"No se encuentran {r_path} y {p_path}. Corre el script 1 o usa --sin-orlab.",
-                  file=sys.stderr)
+        rutas = {k: Path(getattr(a, "or_" + k)) if getattr(a, "or_" + k) else dir_datos / f"or_{k}.csv"
+                 for k in ("resumen", "perfiles", "aletas", "componentes")}
+        faltan = [str(p) for p in rutas.values() if not p.exists()]
+        if faltan:
+            print(f"No se encuentran {faltan}. Corre el script 1 o usa --sin-orlab.", file=sys.stderr)
             return 2
-        or_res = pd.read_csv(r_path).set_index("config_id")
-        or_perf = pd.read_csv(p_path)
+        or_res = pd.read_csv(rutas["resumen"]).set_index("config_id")
+        or_perf = pd.read_csv(rutas["perfiles"])
+        or_ale = pd.read_csv(rutas["aletas"])
+        or_comp = pd.read_csv(rutas["componentes"])
 
-    tol_cp = cfg.verificacion.get("dif_CP_max_frac_L")
-    filas, presup, capas, ventanas = [], [], [], []
+    tol = Tolerancias.desde(cfg.verificacion)
+    filas, presup, capas, ventanas, valores = [], [], [], [], []
     if figuras:
         dir_figs.mkdir(parents=True, exist_ok=True)
     for caso in casos:
-        perfil = aero = None
+        perfil = aero = masas_or = None
         if or_res is not None:
             if caso.id in or_res.index and str(or_res.loc[caso.id, "estado"]) == "ok":
                 f = or_res.loc[caso.id]
                 aero = AeroOR(x_CP=float(f["x_CP_mm"]) * MM, CNa=float(f["CN_alpha_rad"]))
                 perfil = or_perf[or_perf["config_id"] == caso.id]
+                caso = _aletas_or(caso, f, or_ale[or_ale["config_id"] == caso.id])
+                comp = or_comp[or_comp["config_id"] == caso.id]
+                masas_or = {r.componente: r.m_g * 1e-3 for r in comp.itertuples()
+                            if r.componente in ("nariz", "cuerpo", "cola", "aletas")}
             else:
                 print(f"[{caso.id}] sin resultado válido de OpenRocket: se usa perfil analítico "
                       "y Barrowman interno", file=sys.stderr)
-        res = analizar_caso(caso, rellenos=rellenos, perfil=perfil, aero_or=aero,
-                            tol_dif_CP_frac_L=tol_cp)
+        res = analizar_caso(caso, rellenos=rellenos, perfil=perfil, aero_or=aero, masas_or=masas_or,
+                            tol=tol)
+        valores.append({"config_id": caso.id, **caso.barrido})
         capas += res.filas_masas_capas()
         for rr in res.rellenos:
             filas.append(rr.fila)
@@ -128,8 +152,9 @@ def main(argv=None) -> int:
     _escribir(pd.DataFrame(presup), esquemas.PRESUPUESTOS, dir_datos / "presupuestos.csv")
     _escribir(pd.DataFrame(ventanas), esquemas.VENTANAS, dir_datos / "ventanas.csv")
     if figuras and len(resultados):
-        from sensor_lastre.figuras import fig_mapas
-        fig_mapas(resultados, dir_figs)
+        from sensor_lastre.figuras import fig_barrido
+        fig_barrido(resultados, pd.DataFrame(valores), list(cfg.parametros_barrido),
+                    casos[0].estabilidad.SM_min, dir_figs)
     print(f"\n{len(casos)} configuraciones × {len(rellenos)} rellenos → {dir_datos}")
     return 0
 

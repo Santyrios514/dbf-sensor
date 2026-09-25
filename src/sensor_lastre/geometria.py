@@ -164,7 +164,7 @@ def construir_cavidad(caso: Caso, r_e: np.ndarray | None = None, x: np.ndarray |
     dx = float(x[1] - x[0])
     if r_e is None:
         r_e = radio_exterior(x, g)
-    cerrada = g.cola.popa_cerrada
+    cerrada = False  # v2 §3.5: el casco termina en un anillo; la tapa de popa es un mamparo
     est = indice_estacion(x, g)
 
     # erosiones acumuladas por estación: E[s][k] con k = 0..N_s

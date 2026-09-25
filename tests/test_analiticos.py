@@ -5,7 +5,7 @@ import pytest
 
 from sensor_lastre.config import cargar
 from sensor_lastre.geometria import construir_cavidad, erosionar, integrar, malla
-from sensor_lastre.masas import centroide_aleta, masa_vacia
+from sensor_lastre.masas import masa_vacia
 from sensor_lastre.perfiles import radio_cola, radio_exterior, radio_nariz
 
 from conftest import solo
@@ -53,7 +53,7 @@ def test_tronco_de_cono():
     assert V == pytest.approx(np.pi * Lt / 3 * (R**2 + R * Ra + Ra**2), rel=REL)
 
 
-@pytest.mark.parametrize("forma", ["ogiva", "parabolica"])
+@pytest.mark.parametrize("forma", ["ogiva", "parabolica", "elipsoide", "haack"])
 def test_colas_extensibles(forma):
     R, Ra, Lt = 30 * MM, 18 * MM, 60 * MM
     u = np.array([0.0, 1e-6, Lt])
@@ -74,6 +74,7 @@ def test_erosion_cilindro_popa_cerrada():
 
 
 def test_erosion_popa_abierta_sin_fondo():
+    """Popa abierta (v2 §3.5): el casco termina en un anillo de espesor t, sin pared de fondo."""
     R, L, t = 28 * MM, 100 * MM, 2 * MM
     x = malla(L, DX)
     r = erosionar(np.full_like(x, R), t, DX, popa_cerrada=False)
@@ -137,10 +138,3 @@ def test_paredes_distintas_por_estacion(raw):
     assert cav.r_i[i_n] < erosionar(cav.r_e, 1.8 * MM, cav.dx)[i_n]
     # la cavidad es continua y no crece al pasar la unión
     assert np.all(np.isfinite(cav.r_i)) and cav.r_i.min() >= 0
-
-
-def test_centroide_aleta_rectangular_y_triangular():
-    c = 50.0
-    assert centroide_aleta(c, c, 0.0) == pytest.approx(c / 2, rel=1e-12)
-    cr, xs = 60.0, 25.0
-    assert centroide_aleta(cr, 0.0, xs) == pytest.approx((cr + xs) / 3, rel=1e-12)

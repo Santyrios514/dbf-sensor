@@ -222,3 +222,6 @@ data/*
 !data/ejemplos/
 figs/*
 !figs/.gitkeep
+
+# paquetes de resultados generados localmente
+resultados_*.zip

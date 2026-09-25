@@ -1,8 +1,10 @@
-# Única fuente de parámetros del modelo de lastre del sensor remolcado.
+# Única fuente de parámetros del modelo de lastre del sensor remolcado (spec v1 + v2).
 # Unidades de E/S: longitud en mm, masa en g, densidad en kg/m^3, ángulos en grados.
+# Los valores marcados "# PENDIENTE" son supuestos a confirmar con el equipo (v2 §10).
 unidades: {longitud: mm, masa: g, densidad: kg/m3}
 
 materiales:                     # densidad en kg/m^3
+  MAT_PARED_EQ: 1342            # tal como está en el .ork (pared bicapa equivalente)
   PLA: 1240
   PETG: 1270
   ABS: 1050
@@ -27,27 +29,38 @@ rellenos:                       # candidatos a evaluar
   - {nombre: perdigon_pb_epoxy, material: plomo, granular: {empaquetamiento: 0.62, matriz: epoxy}}
 
 geometria_base:
+  longitud_referencia: cuerpo   # cuerpo | total. "L_mm" del barrido se interpreta así.
   nariz:
-    forma: elipsoide            # conica | elipsoide | ogiva_tangente | potencia | haack
-    parametro: null             # n (potencia) o C (haack)
-    longitud: {modo: relativo_D, valor: 1.0}   # absoluto_mm | relativo_D | relativo_L
+    forma: elipsoide            # conica | elipsoide | ogiva_tangente | ogiva | potencia | parabolica | haack
+    parametro: null
+    longitud: {modo: relativo_D, valor: 1.0}          # 65 mm con D = 65
+  cuerpo:
+    longitud: auto              # L_cuerpo − L_n − L_t
   cola:
-    forma: conica               # conica | ogiva | parabolica
-    longitud: {modo: relativo_D, valor: 1.0}
-    diametro_popa: {modo: relativo_D, valor: 0.6}
-    popa_cerrada: true
+    forma: parabolica           # conica | ogiva | elipsoide | potencia | parabolica | haack
+    parametro: 1.0
+    recortada: true             # 'clipped' de OpenRocket (defecto); solo elipsoide/potencia/haack
+    longitud: {modo: relativo_D, valor: 1.0}          # 65 mm
+    diametro_popa: {modo: relativo_D, valor: 0.6}     # 39 mm
+    popa: abierta               # abierta | cerrada   # PENDIENTE (§10.6)
+    mamparo_popa: {espesor_mm: 2.0, material: PLA}   # solo si popa = cerrada
   aletas:
+    tipo: freeform_cola
     n: 4
-    cuerda_raiz: {modo: relativo_L, valor: 0.25}
-    cuerda_punta: {modo: relativo_L, valor: 0.10}
-    semienvergadura: {modo: relativo_D, valor: 0.8}
-    flecha: {modo: borde_salida_recto}      # o {modo: absoluto_mm, valor: ...}
-    espesor_mm: 2.0
-    material: PLA
+    rotacion_deg: 0
+    c_r:       {modo: absoluto_mm, valor: 41.10}      # o {modo: relativo_Lt, valor: 0.632}
+    x_tip_le:  {modo: absoluto_mm, valor: 40.00}
+    h_tip:     {modo: absoluto_mm, valor: 20.00}      # o {modo: r_tip_absoluto_mm, valor: 50.74}
+    extension: {modo: absoluto_mm, valor: 39.98}
+    r_interior_mm: 0.63
+    offset_bottom_mm: 0.02
+    epsilon_mm: 0.08            # el .ork usa ≈ 0.08 mm (P4.x − P5.x)
+    espesor_mm: 1.8             # PENDIENTE (§10.5)
+    material: MAT_PARED_EQ      # PENDIENTE (§10.5): pensado para la pared; ¿PLA macizo?
     fraccion_solida: 1.0
-    borde_salida_desde_popa_mm: 0.0
+    descontar_solape_eje: false
 
-pared:                          # capas de AFUERA hacia ADENTRO
+pared:                          # capas de AFUERA hacia ADENTRO (ρ_eq = 1342 kg/m³ = MAT_PARED_EQ)
   por_defecto:
     - {material: fibra_vidrio_epoxy, espesor_mm: 0.3, fraccion_solida: 1.0}
     - {material: PLA,                espesor_mm: 1.5, fraccion_solida: 1.0}
@@ -58,7 +71,7 @@ pared:                          # capas de AFUERA hacia ADENTRO
 mamparos: []                    # posición del borde delantero; ejemplo:
   # - {x: {modo: relativo_L, valor: 0.5}, espesor_mm: 3.0, material: PLA}
 
-electronica:
+electronica:                    # PENDIENTE (§10.1)
   longitud_mm: 100
   masa_g: 150
   modo: detras_del_lastre       # detras_del_lastre | fija
@@ -66,7 +79,7 @@ electronica:
   holgura_mm: 2.0
   x_cg_relativo_mm: null        # CG propio medido desde x_e; null = centro
 
-masas_puntuales:
+masas_puntuales:                # PENDIENTE (§10.2): herraje de remolque
   - {nombre: herraje_remolque, masa_g: 15, x: {modo: absoluto_mm, valor: 40}}
 
 lastre:
@@ -79,50 +92,71 @@ lastre:
   zonas_prohibidas: []          # [{desde_mm:..., hasta_mm:...}]
 
 estabilidad:
-  SM_min_cal: 1.5
+  SM_min_cal: 1.5               # PENDIENTE (§10.3)
   SM_max_cal: null
+  umbral_margen_bajo_cal: 0.3
 
 condiciones_vuelo:
   V_m_s: 30.0
   rho_aire: isa                 # número en kg/m^3 o "isa"
   altitud_m: 1495               # Medellín
   aoa_deg: 0.0
+  mach: auto                    # auto = V / a(h); un número lo fuerza
+  mach_regresion_or: 0.3        # solo para el test de regresión (v2 §1.4)
 
-remolque:
+remolque:                       # PENDIENTE (§10.2)
   x_T: {modo: relativo_L, valor: 0.15}      # absoluto_mm | relativo_L | en_CG
 
 envolvente:
-  largo_max_mm: 340
-  diametro_max_mm: 122
+  largo_max_mm: 340             # v1; el diseño base mide 390 mm con aletas
+  alto_max_mm: 122
+  ancho_max_mm: null            # PENDIENTE (§10.7)
 
-presupuesto_masa:
+presupuesto_masa:               # PENDIENTE (§10.4)
   lastre_g: [250, 500, 750, 1000, 1500]
 
-barrido:                        # producto cartesiano -> configuraciones
-  L_mm: [270, 350, 400]
-  D_mm: [60, 65, 70]
+barrido:                        # cualquier ruta del YAML (primero secciones, luego geometria_base)
+  modo: cartesiano              # cartesiano | zip
+  parametros:
+    L_mm: [350]
+    D_mm: [65]
+    aletas.h_tip.valor: [20, 30, 40, 50]
+    aletas.extension.valor: [0, 20, 40]
 
-configuraciones: {}             # overrides explícitos por id; se SUMAN al barrido
-  # C350_65_ogiva:
-  #   L_mm: 350
-  #   D_mm: 65
-  #   nariz: {forma: ogiva_tangente}
+configuraciones:                # overrides explícitos por id; se SUMAN al barrido
+  base_ork:                     # idéntica al .ork de referencia (regresión y comparación)
+    L_mm: 350
+    D_mm: 65
 
 openrocket:
-  ork_base: modelos/sensor_base.ork
+  ork_base: modelos/analisis_vol_int.ork
   jar: null                     # null -> ORLAB_JAR o caché de orlab
-  nombres_componentes: {nariz: Nariz, cuerpo: Cuerpo, cola: Cola, aletas: Aletas}
+  nombres_componentes:
+    nariz: Ojiva
+    cuerpo: Cuerpo
+    cola: "Transición"
+    aletas: "Aletas de forma libre"
   n_muestras_perfil: 800
   cna_diferencias: {activar: true, delta_aoa_deg: 1.0}
 
-verificacion:                   # umbrales de los criterios de la sección 8.3
-  dif_CP_max_frac_L: 0.05
-  dif_masa_or_max_frac: 0.03
+verificacion:
+  dif_CP_max_frac_L: 0.05       # |x_CP,OR − x_CP,interno| / L_cuerpo
+  dif_masa_or_max_frac: 0.03    # masa por componente frente a OpenRocket
+  dif_masa_aletas_max_frac: 0.02
+  tol_geometria_ork_mm: 0.001   # verificación de la base contra el .ork
+  regresion_or:                 # v2 §1.4 (OpenRocket 24.12, M = 0.3, AoA 0)
+    masa_g: {valor: 184, tol: 1}
+    x_CG_mm: {valor: 202, tol: 1}
+    x_CP_mm: {valor: 158, tol: 1}
+    estabilidad_cal: {valor: -0.68, tol: 0.02}
 
 numerico:
   dx_mm: 0.1
   n_barrido_ell: 600
   tol_raiz_mm: 0.01
+  n_superficie_aleta: 200       # muestras del tramo P5 → P0 sobre la cola
+  n_franjas_aleta: 48           # Barrowman interno de aletas (como FinSetCalc)
+  tol_superficie_aleta_mm: 0.01
 
 salida:
   dir_datos: data

@@ -1,4 +1,4 @@
-"""Análisis completo de una configuración (flujo de la sección 6.2), independiente de la E/S."""
+"""Análisis completo de una configuración (v1 §6.2 + v2 §6), independiente de la E/S."""
 
 from __future__ import annotations
 
@@ -8,15 +8,17 @@ from dataclasses import dataclass, field
 import numpy as np
 import pandas as pd
 
+from .aletas import envolvente
 from .barrowman import ResultadoCP, cp_interno
 from .config import Caso
+from .esquemas import CURVA
 from .estabilidad import (LimiteGeo, ModeloLastre, Ventana, alpha_trim, limite_geometrico,
                           ventana_SM, x_inicio_lastre)
 from .geometria import Cavidad, construir_cavidad, malla, perfil_desde_muestras
-from .masas import MasaVacia, masa_vacia
+from .masas import MasaVacia, masa_vacia, masas_por_componente
 from .materiales import Relleno
 
-MM, G, CM3 = 1e-3, 1e-3, 1e-6
+MM, G, CM3, MM2 = 1e-3, 1e-3, 1e-6, 1e-6
 NAN = math.nan
 
 
@@ -26,6 +28,18 @@ class AeroOR:
 
     x_CP: float  # m
     CNa: float
+
+
+@dataclass(frozen=True)
+class Tolerancias:
+    dif_CP_frac_L: float | None = None
+    dif_masa_frac: float | None = None
+    dif_masa_aletas_frac: float | None = None
+
+    @classmethod
+    def desde(cls, verif: dict) -> "Tolerancias":
+        return cls(verif.get("dif_CP_max_frac_L"), verif.get("dif_masa_or_max_frac"),
+                   verif.get("dif_masa_aletas_max_frac"))
 
 
 @dataclass
@@ -50,6 +64,8 @@ class ResultadoCaso:
     x_b0: float
     lim: LimiteGeo
     banderas: list[str]
+    dif_masa: dict[str, float] = field(default_factory=dict)  # componente -> fracción
+    dif_masa_total: float = NAN
     rellenos: list[ResultadoRelleno] = field(default_factory=list)
 
     def filas_masas_capas(self) -> list[dict]:
@@ -60,13 +76,18 @@ class ResultadoCaso:
         } for c in self.mv.capas]
 
 
-def banderas_envolvente(caso: Caso) -> tuple[bool, bool]:
+def banderas_envolvente(caso: Caso) -> dict:
+    """L_total, alto y ancho de la sección con aletas, y si caben en la bahía (None = sin dato)."""
     g, a = caso.geom, caso.geom.aletas
-    borde_salida = max(a.x_r0 + a.cr, a.x_r0 + a.xs + a.ct)
-    delta_popa = max(0.0, borde_salida - g.L)
-    cabe_largo = g.L + delta_popa <= caso.envolvente.largo_max
-    cabe_diametro = g.D + 2 * a.s <= caso.envolvente.diametro_max
-    return bool(cabe_largo), bool(cabe_diametro)
+    h_env, w_env = envolvente(a.r_tip, g.R, a.params.n, a.params.rotacion)
+    env = caso.envolvente
+
+    def cabe(v, lim):
+        return None if lim is None else bool(v <= lim + 1e-12)
+
+    return {"L_total_mm": g.L_total / MM, "h_env_mm": h_env / MM, "w_env_mm": w_env / MM,
+            "cabe_largo": cabe(g.L_total, env.largo_max), "cabe_alto": cabe(h_env, env.alto_max),
+            "cabe_ancho": cabe(w_env, env.ancho_max)}
 
 
 def _txt(banderas: list[str]) -> str:
@@ -75,8 +96,10 @@ def _txt(banderas: list[str]) -> str:
 
 def analizar_caso(caso: Caso, rellenos: list[Relleno] | None = None,
                   perfil: pd.DataFrame | None = None, aero_or: AeroOR | None = None,
-                  tol_dif_CP_frac_L: float | None = None) -> ResultadoCaso:
-    """perfil: filas de or_perfiles.csv de este caso (None → perfil analítico)."""
+                  masas_or: dict[str, float] | None = None,
+                  tol: Tolerancias = Tolerancias()) -> ResultadoCaso:
+    """perfil: filas de or_perfiles.csv de este caso (None → perfil analítico).
+    masas_or: {componente: m [kg]} de OpenRocket (nariz, cuerpo, cola, aletas)."""
     g, nu = caso.geom, caso.numerico
     x = malla(g.L, nu.dx)
     r_e = None
@@ -84,15 +107,30 @@ def analizar_caso(caso: Caso, rellenos: list[Relleno] | None = None,
         r_e = perfil_desde_muestras(x, perfil["x_mm"].to_numpy() * MM, perfil["r_ext_mm"].to_numpy() * MM)
     cav = construir_cavidad(caso, r_e=r_e, x=x)
     mv = masa_vacia(caso, cav)
-    cp_int = cp_interno(g, cav.x, cav.r_e)
+    cp_int = cp_interno(g, cav.x, cav.r_e, caso.vuelo.mach, nu.n_franjas_aleta)
 
     banderas: list[str] = []
     if aero_or is not None and math.isfinite(aero_or.x_CP) and math.isfinite(aero_or.CNa):
         x_CP, CNa, fuente = aero_or.x_CP, aero_or.CNa, "openrocket"
-        if tol_dif_CP_frac_L is not None and abs(x_CP - cp_int.x_CP) > tol_dif_CP_frac_L * g.L:
+        if tol.dif_CP_frac_L is not None and abs(x_CP - cp_int.x_CP) > tol.dif_CP_frac_L * g.L:
             banderas.append("dif_CP_alta")
     else:
         x_CP, CNa, fuente = cp_int.x_CP, cp_int.CNa, "interno"
+
+    dif_masa, dif_total = {}, NAN
+    if masas_or:
+        propias = masas_por_componente(caso, mv)
+        for comp, m_or in masas_or.items():
+            if comp in propias and m_or > 0:
+                dif_masa[comp] = propias[comp][0] / m_or - 1
+        comunes = [c for c in masas_or if c in propias]
+        m_or_tot = sum(masas_or[c] for c in comunes)
+        if m_or_tot > 0:
+            dif_total = sum(propias[c][0] for c in comunes) / m_or_tot - 1
+        for comp, d in dif_masa.items():
+            lim = tol.dif_masa_aletas_frac if comp == "aletas" else tol.dif_masa_frac
+            if lim is not None and abs(d) > lim:
+                banderas.append("dif_masa_alta")
 
     x_b0 = x_inicio_lastre(caso, cav)
     lim = limite_geometrico(caso, cav, x_b0)
@@ -100,7 +138,8 @@ def analizar_caso(caso: Caso, rellenos: list[Relleno] | None = None,
         banderas.append("inviable_geo")
 
     res = ResultadoCaso(caso=caso, cav=cav, mv=mv, cp_int=cp_int, x_CP=x_CP, CNa=CNa,
-                        x_CP_fuente=fuente, x_b0=x_b0, lim=lim, banderas=banderas)
+                        x_CP_fuente=fuente, x_b0=x_b0, lim=lim, banderas=banderas,
+                        dif_masa=dif_masa, dif_masa_total=dif_total)
     for rel in (rellenos if rellenos is not None else list(caso.rellenos)):
         res.rellenos.append(_analizar_relleno(res, rel))
     return res
@@ -108,14 +147,13 @@ def analizar_caso(caso: Caso, rellenos: list[Relleno] | None = None,
 
 def _analizar_relleno(res: ResultadoCaso, rel: Relleno) -> ResultadoRelleno:
     caso, cav, mv = res.caso, res.cav, res.mv
-    g, nu, vu = caso.geom, caso.numerico, caso.vuelo
+    g, nu, vu, es = caso.geom, caso.numerico, caso.vuelo, caso.estabilidad
     D_ref, S_ref = g.D, math.pi * g.D**2 / 4
     x_CP, CNa = res.x_CP, res.CNa
     x_b0 = res.x_b0 if math.isfinite(res.x_b0) else 0.0
     mod = ModeloLastre(caso=caso, cav=cav, mv=mv, x_b0=x_b0, rho_b=rel.rho_b)
     ell_geo = res.lim.ell_geo
     banderas = list(res.banderas)
-    cabe_largo, cabe_diam = banderas_envolvente(caso)
 
     def SM(xcg):
         return (x_CP - xcg) / D_ref
@@ -135,14 +173,15 @@ def _analizar_relleno(res: ResultadoCaso, rel: Relleno) -> ResultadoRelleno:
         "x_CP_mm": x_CP / MM, "x_CP_fuente": res.x_CP_fuente,
         "dx_CP_or_vs_interno_mm": (x_CP - res.cp_int.x_CP) / MM if res.x_CP_fuente == "openrocket" else NAN,
         "CN_alpha_rad": CNa,
-        "m_casco_g": mv.m_casco / G, "m_aletas_g": mv.m_aletas / G,
-        "m_mamparos_g": mv.m_mamparos / G, "m_electronica_g": caso.electronica.me / G,
-        "m_puntuales_g": mv.m_puntuales / G, "cabe_largo": cabe_largo, "cabe_diametro": cabe_diam,
+        "m_casco_g": mv.m_casco / G, "A_aleta_mm2": g.aletas.area / MM2, "m_aletas_g": mv.m_aletas / G,
+        "x_CG_aletas_mm": mv.x_aletas / MM, "m_mamparos_g": mv.m_mamparos / G,
+        "m_electronica_g": caso.electronica.me / G, "m_puntuales_g": mv.m_puntuales / G,
+        "dif_masa_or_pct": 100 * res.dif_masa_total,
+        **banderas_envolvente(caso),
     }
 
     ventana = None
-    curva = pd.DataFrame(columns=["ell_mm", "V_b_cm3", "m_b_g", "m_total_g", "x_CG_mm", "SM_cal",
-                                  "alpha_trim_deg"])
+    curva = pd.DataFrame(columns=CURVA)
     if ell_geo > 0:
         Vg = float(mod.V_b(ell_geo))
         xcg_g = float(mod.x_CG(ell_geo))
@@ -152,14 +191,27 @@ def _analizar_relleno(res: ResultadoCaso, rel: Relleno) -> ResultadoRelleno:
             "x_CG_geo_mm": xcg_g / MM, "SM_geo_cal": SM(xcg_g),
             "alpha_trim_geo_deg": float(trim_deg(ell_geo)),
         })
-        ventana = ventana_SM(mod, ell_geo, x_CP, D_ref, caso.estabilidad.SM_min,
-                             caso.estabilidad.SM_max, nu.n_ell, nu.tol)
-        banderas += ventana.banderas
+        ventana = ventana_SM(mod, ell_geo, x_CP, D_ref, es.SM_min, es.SM_max, nu.n_ell, nu.tol)
+        SM_inf = float(mod.SM_inf(ventana.ell_star, x_CP, D_ref)) if ventana.ell_star > 0 else NAN
         fila.update({
             "ell_star_mm": ventana.ell_star / MM, "x_CG_min_mm": ventana.x_CG_min / MM,
             "SM_max_alcanzable_cal": SM(ventana.x_CG_min),
-            "ell_SM_min_mm": ventana.ell_SM_min / MM, "ell_SM_max_mm": ventana.ell_SM_max / MM,
+            "SM_inf_cal": SM_inf, "margen_SM_inf_cal": SM_inf - es.SM_min,
         })
+        por_geometria = math.isfinite(SM_inf) and SM_inf < es.SM_min
+        if por_geometria:
+            # no se proponen longitudes de lastre: el techo lo ponen las aletas y el CP
+            banderas.append("SM_inalcanzable_por_geometria")
+            ventana.intervalos, ventana.ell_SM_min, ventana.ell_SM_max = [], NAN, NAN
+            if "SM_inalcanzable" not in ventana.banderas:
+                ventana.banderas.append("SM_inalcanzable")
+        elif math.isfinite(SM_inf) and SM_inf - es.SM_min < es.umbral_margen_bajo:
+            banderas.append("margen_SM_bajo")
+        banderas += ventana.banderas
+        fila.update({"ell_SM_min_mm": ventana.ell_SM_min / MM, "ell_SM_max_mm": ventana.ell_SM_max / MM})
+        if math.isfinite(ventana.ell_SM_min):
+            # no contractual (no va a resultados.csv): alimenta la figura de masa necesaria
+            fila["m_lastre_SM_min_g"] = float(mod.m_b(ventana.ell_SM_min)) / G
         ell_u = ventana.ell_SM_max
         if math.isfinite(ell_u):
             Vu = float(mod.V_b(ell_u))

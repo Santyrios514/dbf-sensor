@@ -1,4 +1,4 @@
-"""Carga, validación y expansión del barrido de `config/config.yaml`.
+"""Carga, validación y expansión del barrido de `config/config.yaml` (spec v1 + v2).
 
 Todo lo que sale de aquí está en SI (m, kg, rad). Los mm/g/grados del YAML se
 convierten en este módulo y en ningún otro.
@@ -9,21 +9,24 @@ from __future__ import annotations
 import copy
 import itertools
 import math
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from pathlib import Path
 from typing import Any
 
 import yaml
 
+from . import aletas as mod_aletas
 from .atmosfera import isa
 from .materiales import Capa, Relleno, densidad_granular, espesor_total
+from .perfiles import FORMAS, radio_superficie
 
 MM = 1e-3
 G = 1e-3
 
 ESTACIONES = ("nariz", "cuerpo", "cola")
-FORMAS_NARIZ = ("conica", "elipsoide", "ogiva_tangente", "potencia", "haack")
-FORMAS_COLA = ("conica", "ogiva", "parabolica")
+FORMAS_NARIZ = ("conica", "elipsoide", "ogiva_tangente", "ogiva", "potencia", "parabolica", "haack")
+FORMAS_COLA = ("conica", "ogiva", "elipsoide", "potencia", "parabolica", "haack")
+CON_PARAMETRO = ("potencia",)  # formas cuyo parámetro no tiene valor por defecto
 
 
 class ConfigError(ValueError):
@@ -47,32 +50,24 @@ class Nariz:
 @dataclass(frozen=True)
 class Cola:
     forma: str
+    parametro: float | None
     Lt: float
     Ra: float
-    popa_cerrada: bool
+    popa: str  # abierta | cerrada
+    recortada: bool = True  # clipped de OpenRocket; solo afecta a elipsoide, potencia y haack
 
-
-@dataclass(frozen=True)
-class Aletas:
-    n: int
-    cr: float
-    ct: float
-    s: float
-    xs: float
-    tf: float
-    material: str
-    rho: float
-    phi: float
-    x_r0: float
+    @property
+    def popa_cerrada(self) -> bool:
+        return self.popa == "cerrada"
 
 
 @dataclass(frozen=True)
 class Geometria:
-    L: float
+    L: float  # longitud del cuerpo (nariz + cuerpo + cola)
     D: float
     nariz: Nariz
     cola: Cola
-    aletas: Aletas
+    aletas: "mod_aletas.GeomAleta | None" = None
 
     @property
     def R(self) -> float:
@@ -86,6 +81,11 @@ class Geometria:
     def x_cola(self) -> float:
         return self.L - self.cola.Lt
 
+    @property
+    def L_total(self) -> float:
+        """Longitud total con las aletas que sobresalen de la popa."""
+        return max(self.L, self.aletas.x_TE) if self.aletas is not None else self.L
+
 
 @dataclass(frozen=True)
 class Mamparo:
@@ -93,6 +93,7 @@ class Mamparo:
     e: float
     material: str
     rho: float
+    nombre: str = "mamparo"
 
 
 @dataclass(frozen=True)
@@ -104,7 +105,7 @@ class Electronica:
     holgura: float
     x_cg_rel: float | None
 
-    def x_cg(self, x_e: float) -> float:
+    def x_cg(self, x_e):
         return x_e + (self.x_cg_rel if self.x_cg_rel is not None else self.Le / 2.0)
 
 
@@ -130,6 +131,7 @@ class Lastre:
 class Estabilidad:
     SM_min: float
     SM_max: float | None
+    umbral_margen_bajo: float
 
 
 @dataclass(frozen=True)
@@ -139,14 +141,12 @@ class Vuelo:
     a: float
     altitud: float
     aoa: float
+    mach: float  # el que se usa (auto = V / a(h))
+    mach_regresion_or: float | None
 
     @property
     def q(self) -> float:
         return 0.5 * self.rho * self.V**2
-
-    @property
-    def mach(self) -> float:
-        return self.V / self.a
 
 
 @dataclass(frozen=True)
@@ -157,8 +157,9 @@ class Remolque:
 
 @dataclass(frozen=True)
 class Envolvente:
-    largo_max: float
-    diametro_max: float
+    largo_max: float | None
+    alto_max: float | None
+    ancho_max: float | None
 
 
 @dataclass(frozen=True)
@@ -166,14 +167,18 @@ class Numerico:
     dx: float
     n_ell: int
     tol: float
+    n_superficie_aleta: int
+    n_franjas_aleta: int
+    tol_superficie_aleta: float
 
 
 @dataclass(frozen=True)
 class Caso:
-    """Una configuración geométrica completamente resuelta (SI)."""
+    """Una configuración completamente resuelta (SI)."""
 
     id: str
     geom: Geometria
+    params_aleta: "mod_aletas.ParamsAleta"
     pared: dict[str, tuple[Capa, ...]]
     mamparos: tuple[Mamparo, ...]
     electronica: Electronica
@@ -186,6 +191,7 @@ class Caso:
     presupuesto: tuple[float, ...]
     numerico: Numerico
     rellenos: tuple[Relleno, ...]
+    barrido: dict[str, Any] = field(default_factory=dict)  # ruta -> valor de este caso
 
     def estacion_de(self, x: float) -> str:
         if x < self.geom.x_cuerpo:
@@ -193,6 +199,10 @@ class Caso:
         if x < self.geom.x_cola:
             return "cuerpo"
         return "cola"
+
+    def con_aletas(self, g_aleta: "mod_aletas.GeomAleta") -> "Caso":
+        """Copia del caso con otra geometría de aleta (p. ej. la exportada por OpenRocket)."""
+        return replace(self, geom=replace(self.geom, aletas=g_aleta))
 
 
 @dataclass
@@ -202,8 +212,9 @@ class Config:
     casos: list[Caso]
     rellenos: tuple[Relleno, ...]
     openrocket: dict[str, Any] = field(default_factory=dict)
-    verificacion: dict[str, float] = field(default_factory=dict)
+    verificacion: dict[str, Any] = field(default_factory=dict)
     salida: dict[str, Any] = field(default_factory=dict)
+    parametros_barrido: tuple[str, ...] = ()
 
     def caso(self, config_id: str) -> Caso:
         for c in self.casos:
@@ -226,8 +237,9 @@ def deep_merge(base: dict, override: dict) -> dict:
     return out
 
 
-def _longitud(spec: Any, L: float, D: float, donde: str, errores: list[str]) -> float:
-    """Resuelve {modo: absoluto_mm | relativo_D | relativo_L, valor} a metros."""
+def _longitud(spec: Any, bases: dict[str, float], donde: str, errores: list[str]) -> float:
+    """Resuelve {modo, valor} a metros. `bases` mapea el sufijo del modo relativo a su base
+    (p. ej. {'D': D, 'L': L, 'Lt': Lt})."""
     if isinstance(spec, (int, float)):
         return float(spec) * MM
     if not isinstance(spec, dict) or "modo" not in spec:
@@ -239,11 +251,10 @@ def _longitud(spec: Any, L: float, D: float, donde: str, errores: list[str]) -> 
         return math.nan
     if modo == "absoluto_mm":
         return float(valor) * MM
-    if modo == "relativo_D":
-        return float(valor) * D
-    if modo == "relativo_L":
-        return float(valor) * L
-    errores.append(f"{donde}: modo '{modo}' desconocido (absoluto_mm | relativo_D | relativo_L)")
+    if modo.startswith("relativo_") and modo[len("relativo_"):] in bases:
+        return float(valor) * bases[modo[len("relativo_"):]]
+    validos = ["absoluto_mm"] + [f"relativo_{k}" for k in bases]
+    errores.append(f"{donde}: modo '{modo}' no válido aquí ({' | '.join(validos)})")
     return math.nan
 
 
@@ -272,6 +283,21 @@ def _capas(lista: Any, materiales: dict, donde: str, errores: list[str]) -> tupl
     return tuple(capas)
 
 
+def _parametro(forma: str, param: Any, donde: str, errores: list[str]) -> float | None:
+    if param is None:
+        if forma in CON_PARAMETRO:
+            errores.append(f"{donde}: la forma '{forma}' necesita 'parametro'")
+        return FORMAS.get(forma, (None, None))[1]
+    param = float(param)
+    if forma == "potencia" and not param > 0:
+        errores.append(f"{donde}: el exponente de 'potencia' debe ser > 0")
+    if forma == "parabolica" and not 0 <= param <= 1:
+        errores.append(f"{donde}: K de 'parabolica' debe estar en [0, 1]")
+    if forma in ("ogiva", "ogiva_tangente") and not 0 <= param <= 1:
+        errores.append(f"{donde}: el parámetro de 'ogiva' debe estar en [0, 1]")
+    return param
+
+
 # --------------------------------------------------------------------------- resolución
 
 
@@ -294,88 +320,128 @@ def _rellenos(raw: dict, errores: list[str]) -> tuple[Relleno, ...]:
     return tuple(out)
 
 
-def _resolver_caso(cid: str, L_mm: float, D_mm: float, sec: dict, rellenos, errores_glob) -> Caso:
+def _params_aleta(a: dict, L: float, D: float, Lt: float, mats: dict, errores: list[str]):
+    if a.get("tipo", "freeform_cola") != "freeform_cola":
+        errores.append(f"aletas.tipo '{a.get('tipo')}' no soportado (solo freeform_cola)")
+    b = {"D": D, "L": L, "Lt": Lt}
+    c_r = _longitud(a["c_r"], b, "aletas.c_r", errores)
+    x_s = _longitud(a["x_tip_le"], b, "aletas.x_tip_le", errores)
+    ht = a["h_tip"]
+    h = r_tip = None
+    if isinstance(ht, dict) and ht.get("modo") == "r_tip_absoluto_mm":
+        r_tip = float(ht["valor"]) * MM
+    else:
+        h = _longitud(ht, {"D": D}, "aletas.h_tip", errores)
+    e = _longitud(a["extension"], {"D": D}, "aletas.extension", errores)
+    t = float(a["espesor_mm"]) * MM
+    if not t > 0:
+        errores.append("aletas.espesor_mm debe ser > 0")
+    n = int(a["n"])
+    if n < 1:
+        errores.append("aletas.n debe ser ≥ 1")
+    phi = float(a.get("fraccion_solida", 1.0))
+    if not 0 < phi <= 1:
+        errores.append("aletas.fraccion_solida debe estar en (0, 1]")
+    return mod_aletas.ParamsAleta(
+        n=n, rotacion=math.radians(float(a.get("rotacion_deg", 0.0))), c_r=c_r, x_s=x_s, h=h,
+        r_tip_obj=r_tip, e=e, r_in=float(a.get("r_interior_mm", 0.0)) * MM,
+        delta_b=float(a.get("offset_bottom_mm", 0.0)) * MM, eps=float(a.get("epsilon_mm", 0.05)) * MM,
+        t=t, material=a["material"], rho=_material(a["material"], mats, "aletas.material", errores),
+        phi=phi, descontar_solape_eje=bool(a.get("descontar_solape_eje", False)),
+    )
+
+
+def _resolver_caso(cid: str, L_mm: float, D_mm: float, sec: dict, rellenos, errores_glob,
+                   valores_barrido: dict) -> Caso | None:
     errores: list[str] = []
     mats = sec["materiales"]
-    L, D = float(L_mm) * MM, float(D_mm) * MM
+    D = float(D_mm) * MM
     R = D / 2
     gb = sec["geometria_base"]
+    ref = gb.get("longitud_referencia", "cuerpo")
+    if ref not in ("cuerpo", "total"):
+        errores.append(f"geometria_base.longitud_referencia '{ref}' no válida (cuerpo | total)")
+    L_in = float(L_mm) * MM
+
+    # extensión de aletas primero: con referencia 'total', L_cuerpo = L − e
+    e_aleta = _longitud(gb["aletas"]["extension"], {"D": D}, "aletas.extension", [])
+    L = L_in - e_aleta if ref == "total" else L_in
+    if gb.get("cuerpo", {}).get("longitud", "auto") != "auto":
+        errores.append("geometria_base.cuerpo.longitud: solo se admite 'auto' (L − L_n − L_t)")
 
     # --- nariz
     n = gb["nariz"]
     forma_n = n.get("forma")
     if forma_n not in FORMAS_NARIZ:
         errores.append(f"nariz.forma '{forma_n}' no válida {FORMAS_NARIZ}")
-    param = n.get("parametro")
-    if forma_n == "potencia" and (param is None or not param > 0):
-        errores.append("nariz.parametro (n) debe ser > 0 para forma 'potencia'")
-    if forma_n == "haack" and param is None:
-        param = 0.0
-    Ln = _longitud(n["longitud"], L, D, "nariz.longitud", errores)
-    nariz = Nariz(forma=forma_n, parametro=None if param is None else float(param), Ln=Ln)
+    param_n = _parametro(forma_n, n.get("parametro"), "nariz", errores)
+    Ln = _longitud(n["longitud"], {"D": D, "L": L}, "nariz.longitud", errores)
+    nariz = Nariz(forma=forma_n, parametro=param_n, Ln=Ln)
 
     # --- cola
     c = gb["cola"]
-    if c.get("forma") not in FORMAS_COLA:
-        errores.append(f"cola.forma '{c.get('forma')}' no válida {FORMAS_COLA}")
-    Lt = _longitud(c["longitud"], L, D, "cola.longitud", errores)
-    Ra = _longitud(c["diametro_popa"], L, D, "cola.diametro_popa", errores) / 2
-    cola = Cola(forma=c.get("forma"), Lt=Lt, Ra=Ra, popa_cerrada=bool(c.get("popa_cerrada", True)))
+    forma_c = c.get("forma")
+    if forma_c not in FORMAS_COLA:
+        errores.append(f"cola.forma '{forma_c}' no válida {FORMAS_COLA}")
+    param_c = _parametro(forma_c, c.get("parametro"), "cola", errores)
+    Lt = _longitud(c["longitud"], {"D": D, "L": L}, "cola.longitud", errores)
+    Ra = _longitud(c["diametro_popa"], {"D": D}, "cola.diametro_popa", errores) / 2
+    popa = c.get("popa", "abierta")
+    if popa not in ("abierta", "cerrada"):
+        errores.append(f"cola.popa '{popa}' no válida (abierta | cerrada)")
+    cola = Cola(forma=forma_c, parametro=param_c, Lt=Lt, Ra=Ra, popa=popa,
+                recortada=bool(c.get("recortada", True)))
 
     if not Ln > 0:
         errores.append(f"L_n debe ser > 0 (vale {Ln / MM:.2f} mm)")
-    if not Lt >= 0:
-        errores.append(f"L_t debe ser ≥ 0 (vale {Lt / MM:.2f} mm)")
+    if not Lt > 0:
+        errores.append(f"L_t debe ser > 0 (vale {Lt / MM:.2f} mm)")
     if not Ln + Lt < L:
-        errores.append(f"L_n + L_t = {(Ln + Lt) / MM:.2f} mm debe ser < L = {L_mm} mm")
-    if not Ra <= R:
-        errores.append(f"R_a = {Ra / MM:.2f} mm debe ser ≤ R = {R / MM:.2f} mm")
+        errores.append(f"L_n + L_t = {(Ln + Lt) / MM:.2f} mm debe ser < L_cuerpo = {L / MM:.2f} mm")
+    if not 0 < Ra <= R:
+        errores.append(f"R_a = {Ra / MM:.2f} mm debe cumplir 0 < R_a ≤ R = {R / MM:.2f} mm")
 
-    # --- aletas
-    a = gb["aletas"]
-    cr = _longitud(a["cuerda_raiz"], L, D, "aletas.cuerda_raiz", errores)
-    ct = _longitud(a["cuerda_punta"], L, D, "aletas.cuerda_punta", errores)
-    s = _longitud(a["semienvergadura"], L, D, "aletas.semienvergadura", errores)
-    fl = a.get("flecha", {"modo": "borde_salida_recto"})
-    if fl.get("modo") == "borde_salida_recto":
-        xs = cr - ct
-    else:
-        xs = _longitud(fl, L, D, "aletas.flecha", errores)
-    tf = float(a["espesor_mm"]) * MM
-    if not tf > 0:
-        errores.append("aletas.espesor_mm debe ser > 0")
-    rho_f = _material(a["material"], mats, "aletas.material", errores)
-    phi_f = float(a.get("fraccion_solida", 1.0))
-    x_r0 = L - float(a.get("borde_salida_desde_popa_mm", 0.0)) * MM - cr
-    aletas = Aletas(
-        n=int(a["n"]), cr=cr, ct=ct, s=s, xs=xs, tf=tf, material=a["material"],
-        rho=rho_f, phi=phi_f, x_r0=x_r0,
-    )
-    geom = Geometria(L=L, D=D, nariz=nariz, cola=cola, aletas=aletas)
+    geom = Geometria(L=L, D=D, nariz=nariz, cola=cola)
 
     # --- pared
     p = sec["pared"]
     por_defecto = _capas(p.get("por_defecto"), mats, "pared.por_defecto", errores)
-    pared = {}
-    for est in ESTACIONES:
-        pared[est] = _capas(p[est], mats, f"pared.{est}", errores) if p.get(est) else por_defecto
-    if not cola.popa_cerrada and pared["cola"] and not espesor_total(pared["cola"]) < Ra:
-        errores.append("con popa abierta, Σ t_k de la cola debe ser < R_a")
+    pared = {est: (_capas(p[est], mats, f"pared.{est}", errores) if p.get(est) else por_defecto)
+             for est in ESTACIONES}
+    if pared["cola"] and not espesor_total(pared["cola"]) < Ra:
+        errores.append("Σ t_k de la cola debe ser < R_a (popa abierta: anillo de pared en la base)")
     for est in ESTACIONES:
         if pared[est] and not espesor_total(pared[est]) < R:
             errores.append(f"pared.{est}: Σ t_k debe ser < R")
 
-    # --- mamparos
+    # --- aletas (se resuelven sobre el perfil analítico; en modo OpenRocket se reemplazan)
+    pa = _params_aleta(gb["aletas"], L, D, Lt, mats, errores)
+    g_aleta = None
+    if not errores:
+        g_aleta = mod_aletas.construir(
+            pa, geom.x_cola, Lt, lambda x: radio_superficie(x, geom),
+            int(sec["numerico"].get("n_superficie_aleta", 200)),
+            float(sec["numerico"].get("tol_superficie_aleta_mm", 0.01)) * MM, errores)
+        geom = replace(geom, aletas=g_aleta)
+
+    # --- mamparos (+ tapa de popa si es cerrada)
     mamparos = []
     for i, m in enumerate(sec.get("mamparos") or []):
         d = f"mamparos[{i}]"
         e = float(m.get("espesor_mm", 0.0)) * MM
         if not e > 0:
             errores.append(f"{d}: espesor_mm debe ser > 0")
-        mamparos.append(Mamparo(
-            x=_longitud(m["x"], L, D, d + ".x", errores), e=e, material=m["material"],
-            rho=_material(m["material"], mats, d, errores),
-        ))
+        mamparos.append(Mamparo(x=_longitud(m["x"], {"D": D, "L": L}, d + ".x", errores), e=e,
+                                material=m["material"], rho=_material(m["material"], mats, d, errores),
+                                nombre=m.get("nombre", f"mamparo_{i}")))
+    if cola.popa_cerrada:
+        mp = c.get("mamparo_popa") or {}
+        e_b = float(mp.get("espesor_mm", 0.0)) * MM
+        if not e_b > 0:
+            errores.append("cola.mamparo_popa.espesor_mm debe ser > 0 con popa cerrada")
+        mat = mp.get("material", "")
+        mamparos.append(Mamparo(x=L - e_b, e=e_b, material=mat,
+                                rho=_material(mat, mats, "cola.mamparo_popa", errores), nombre="tapa_popa"))
 
     # --- electrónica
     el = sec["electronica"]
@@ -395,14 +461,14 @@ def _resolver_caso(cid: str, L_mm: float, D_mm: float, sec: dict, rellenos, erro
 
     puntuales = tuple(
         MasaPuntual(nombre=mp.get("nombre", f"p{i}"), m=float(mp["masa_g"]) * G,
-                    x=_longitud(mp["x"], L, D, f"masas_puntuales[{i}].x", errores))
+                    x=_longitud(mp["x"], {"D": D, "L": L}, f"masas_puntuales[{i}].x", errores))
         for i, mp in enumerate(sec.get("masas_puntuales") or [])
     )
 
     # --- lastre
     la = sec["lastre"]
     xi = la.get("x_inicio", "auto")
-    x_inicio = None if xi in (None, "auto") else _longitud(xi, L, D, "lastre.x_inicio", errores)
+    x_inicio = None if xi in (None, "auto") else _longitud(xi, {"D": D, "L": L}, "lastre.x_inicio", errores)
     fll = float(la.get("factor_llenado", 1.0))
     if not 0 < fll <= 1:
         errores.append(f"lastre.factor_llenado debe estar en (0, 1] (vale {fll})")
@@ -426,29 +492,44 @@ def _resolver_caso(cid: str, L_mm: float, D_mm: float, sec: dict, rellenos, erro
     SM_max = es.get("SM_max_cal")
     if SM_max is not None and not float(SM_max) > SM_min:
         errores.append(f"SM_max_cal ({SM_max}) debe ser > SM_min_cal ({SM_min})")
-    estab = Estabilidad(SM_min=SM_min, SM_max=None if SM_max is None else float(SM_max))
+    estab = Estabilidad(SM_min=SM_min, SM_max=None if SM_max is None else float(SM_max),
+                        umbral_margen_bajo=float(es.get("umbral_margen_bajo_cal", 0.0)))
 
     # --- vuelo
     cv = sec["condiciones_vuelo"]
     h = float(cv.get("altitud_m", 0.0))
     est_isa = isa(h)
     rho_aire = est_isa.rho if cv.get("rho_aire", "isa") == "isa" else float(cv["rho_aire"])
-    vuelo = Vuelo(V=float(cv["V_m_s"]), rho=rho_aire, a=est_isa.a, altitud=h,
-                  aoa=math.radians(float(cv.get("aoa_deg", 0.0))))
+    V = float(cv["V_m_s"])
+    mach = cv.get("mach", "auto")
+    mach = V / est_isa.a if mach in (None, "auto") else float(mach)
+    mr = cv.get("mach_regresion_or")
+    vuelo = Vuelo(V=V, rho=rho_aire, a=est_isa.a, altitud=h,
+                  aoa=math.radians(float(cv.get("aoa_deg", 0.0))), mach=mach,
+                  mach_regresion_or=None if mr is None else float(mr))
 
     # --- remolque
     xT = sec["remolque"]["x_T"]
-    if isinstance(xT, str) and xT == "en_CG" or isinstance(xT, dict) and xT.get("modo") == "en_CG":
+    if xT == "en_CG" or isinstance(xT, dict) and xT.get("modo") == "en_CG":
         remolque = Remolque(modo="en_CG", x_T=None)
     else:
-        remolque = Remolque(modo="absoluto", x_T=_longitud(xT, L, D, "remolque.x_T", errores))
+        remolque = Remolque(modo="absoluto", x_T=_longitud(xT, {"D": D, "L": L}, "remolque.x_T", errores))
 
     env = sec["envolvente"]
-    envolvente = Envolvente(largo_max=float(env["largo_max_mm"]) * MM,
-                            diametro_max=float(env["diametro_max_mm"]) * MM)
+
+    def _mm_o_none(k):
+        v = env.get(k)
+        return None if v is None else float(v) * MM
+
+    envolvente = Envolvente(largo_max=_mm_o_none("largo_max_mm"), alto_max=_mm_o_none("alto_max_mm"),
+                            ancho_max=_mm_o_none("ancho_max_mm"))
     nu = sec["numerico"]
-    numerico = Numerico(dx=float(nu["dx_mm"]) * MM, n_ell=int(nu["n_barrido_ell"]),
-                        tol=float(nu["tol_raiz_mm"]) * MM)
+    numerico = Numerico(
+        dx=float(nu["dx_mm"]) * MM, n_ell=int(nu["n_barrido_ell"]), tol=float(nu["tol_raiz_mm"]) * MM,
+        n_superficie_aleta=int(nu.get("n_superficie_aleta", 200)),
+        n_franjas_aleta=int(nu.get("n_franjas_aleta", 48)),
+        tol_superficie_aleta=float(nu.get("tol_superficie_aleta_mm", 0.01)) * MM,
+    )
     if not numerico.dx > 0:
         errores.append("numerico.dx_mm debe ser > 0")
 
@@ -456,50 +537,120 @@ def _resolver_caso(cid: str, L_mm: float, D_mm: float, sec: dict, rellenos, erro
 
     if errores:
         errores_glob.extend(f"[{cid}] {e}" for e in errores)
+        return None
     return Caso(
-        id=cid, geom=geom, pared=pared, mamparos=tuple(mamparos), electronica=electronica,
-        puntuales=puntuales, lastre=lastre, estabilidad=estab, vuelo=vuelo, remolque=remolque,
-        envolvente=envolvente, presupuesto=presupuesto, numerico=numerico, rellenos=rellenos,
+        id=cid, geom=geom, params_aleta=pa, pared=pared, mamparos=tuple(mamparos),
+        electronica=electronica, puntuales=puntuales, lastre=lastre, estabilidad=estab, vuelo=vuelo,
+        remolque=remolque, envolvente=envolvente, presupuesto=presupuesto, numerico=numerico,
+        rellenos=rellenos, barrido=dict(valores_barrido),
     )
 
 
-# Secciones que un override de `configuraciones` puede modificar además de la geometría.
+# Secciones que un override de `configuraciones` o una ruta del barrido pueden modificar.
 SECCIONES_CASO = (
     "pared", "mamparos", "electronica", "masas_puntuales", "lastre", "estabilidad",
     "condiciones_vuelo", "remolque", "envolvente", "presupuesto_masa", "numerico",
 )
+ESPECIALES = ("L_mm", "D_mm")
 
 
-def _fmt_num(v: float) -> str:
-    return f"{v:g}"
+def _fmt_num(v) -> str:
+    return f"{v:g}" if isinstance(v, (int, float)) else str(v)
 
 
-def expandir(raw: dict) -> list[tuple[str, float, float, dict]]:
-    """Barrido cartesiano L×D + overrides explícitos → [(id, L_mm, D_mm, secciones)]."""
-    base = {k: raw.get(k) for k in SECCIONES_CASO}
-    base["geometria_base"] = raw["geometria_base"]
+def _base_secciones(raw: dict) -> dict:
+    base = {k: copy.deepcopy(raw.get(k)) for k in SECCIONES_CASO}
+    base["geometria_base"] = copy.deepcopy(raw["geometria_base"])
     base["materiales"] = raw["materiales"]
-    out = []
+    return base
+
+
+def _ubicar(sec: dict, ruta: str) -> tuple[dict, str] | None:
+    """(dict contenedor, clave final) de una ruta con puntos. Se busca primero en las secciones
+    del caso y luego dentro de geometria_base. None si la ruta no existe."""
+    partes = ruta.split(".")
+    for raiz in (sec, sec["geometria_base"]):
+        d = raiz
+        ok = True
+        for p in partes[:-1]:
+            if isinstance(d, dict) and isinstance(d.get(p), dict):
+                d = d[p]
+            else:
+                ok = False
+                break
+        if ok and isinstance(d, dict) and partes[-1] in d:
+            return d, partes[-1]
+    return None
+
+
+def _etiqueta(ruta: str, rutas: list[str]) -> str:
+    partes = [p for p in ruta.split(".") if p != "valor"]
+    corta = partes[-1]
+    if sum(1 for r in rutas if [p for p in r.split(".") if p != "valor"][-1] == corta) > 1:
+        corta = "_".join(partes)
+    return corta
+
+
+def expandir(raw: dict) -> tuple[list[tuple[str, float, float, dict, dict]], list[str]]:
+    """Barrido (cartesiano o zip) + overrides explícitos → [(id, L_mm, D_mm, secciones, valores)]."""
+    errores: list[str] = []
     b = raw.get("barrido") or {}
-    for L_mm, D_mm in itertools.product(b.get("L_mm", []), b.get("D_mm", [])):
-        out.append((f"L{_fmt_num(L_mm)}_D{_fmt_num(D_mm)}", L_mm, D_mm, base))
+    modo = b.get("modo", "cartesiano")
+    params = dict(b.get("parametros") or {})
+    if not params:
+        errores.append("barrido.parametros está vacío")
+        return [], errores
+    for k in ESPECIALES:
+        if k not in params:
+            errores.append(f"barrido.parametros debe incluir '{k}'")
+    rutas = [k for k in params if k not in ESPECIALES]
+    base = _base_secciones(raw)
+    for r in rutas:
+        if _ubicar(base, r) is None:
+            errores.append(f"barrido: la ruta '{r}' no existe en el YAML")
+    if errores:
+        return [], errores
+    claves = list(params)
+    listas = [list(v) if isinstance(v, (list, tuple)) else [v] for v in params.values()]
+    if modo == "cartesiano":
+        combos = list(itertools.product(*listas))
+    elif modo == "zip":
+        if len({len(x) for x in listas}) != 1:
+            errores.append("barrido.modo 'zip' requiere listas de la misma longitud")
+            return [], errores
+        combos = list(zip(*listas))
+    else:
+        errores.append(f"barrido.modo '{modo}' no válido (cartesiano | zip)")
+        return [], errores
+
+    out = []
+    for combo in combos:
+        valores = dict(zip(claves, combo))
+        sec = copy.deepcopy(base)
+        for r in rutas:
+            d, k = _ubicar(sec, r)
+            d[k] = valores[r]
+        cid = f"L{_fmt_num(valores['L_mm'])}_D{_fmt_num(valores['D_mm'])}"
+        cid += "".join(f"_{_etiqueta(r, rutas)}{_fmt_num(valores[r])}" for r in rutas)
+        out.append((cid, valores["L_mm"], valores["D_mm"], sec, {r: valores[r] for r in rutas}))
+
     for cid, ov in (raw.get("configuraciones") or {}).items():
         ov = dict(ov or {})
         L_mm, D_mm = ov.pop("L_mm"), ov.pop("D_mm")
-        sec = dict(base)
+        sec = copy.deepcopy(base)
         geo_ov = {k: v for k, v in ov.items() if k in raw["geometria_base"]}
-        sec["geometria_base"] = deep_merge(raw["geometria_base"], geo_ov)
+        sec["geometria_base"] = deep_merge(sec["geometria_base"], geo_ov)
         for k, v in ov.items():
             if k in SECCIONES_CASO:
-                sec[k] = deep_merge(base[k], v) if isinstance(v, dict) and isinstance(base[k], dict) else v
+                sec[k] = deep_merge(sec[k], v) if isinstance(v, dict) and isinstance(sec[k], dict) else v
             elif k not in geo_ov:
-                raise ConfigError([f"configuraciones.{cid}: clave '{k}' desconocida"])
-        out.append((str(cid), L_mm, D_mm, sec))
-    return out
+                errores.append(f"configuraciones.{cid}: clave '{k}' desconocida")
+        out.append((str(cid), L_mm, D_mm, sec, {}))
+    return out, errores
 
 
 REQUERIDAS = ("materiales", "rellenos", "geometria_base", "pared", "electronica", "lastre",
-              "estabilidad", "condiciones_vuelo", "remolque", "envolvente", "numerico")
+              "estabilidad", "condiciones_vuelo", "remolque", "envolvente", "numerico", "barrido")
 
 
 def cargar(ruta: str | Path | dict) -> Config:
@@ -515,18 +666,27 @@ def cargar(ruta: str | Path | dict) -> Config:
         raise ConfigError([f"falta la sección '{k}'" for k in faltan])
     errores: list[str] = []
     rellenos = _rellenos(raw, errores)
-    casos = [_resolver_caso(cid, L, D, sec, rellenos, errores) for cid, L, D, sec in expandir(raw)]
+    expandidos, err_exp = expandir(raw)
+    errores += err_exp
+    casos = []
+    for cid, L, D, sec, vals in expandidos:
+        c = _resolver_caso(cid, L, D, sec, rellenos, errores, vals)
+        if c is not None:
+            casos.append(c)
     ids = [c.id for c in casos]
     dup = {i for i in ids if ids.count(i) > 1}
     if dup:
         errores.append(f"ids de configuración repetidos: {sorted(dup)}")
-    if not casos:
+    if not expandidos and not err_exp:
         errores.append("no hay configuraciones (barrido y configuraciones vacíos)")
     if errores:
         raise ConfigError(errores)
+    rutas = tuple(k for k in (raw["barrido"].get("parametros") or {}) if k not in ESPECIALES)
     return Config(
         raw=raw, ruta=path, casos=casos, rellenos=rellenos,
         openrocket=raw.get("openrocket") or {},
         verificacion=raw.get("verificacion") or {},
         salida=raw.get("salida") or {},
+        parametros_barrido=rutas,
     )
+

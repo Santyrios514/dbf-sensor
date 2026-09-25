@@ -127,6 +127,40 @@ class ModeloLastre:
         num = self.rho_b * self.fll * A * (xb - self.x_CG(ell)) + self.caso.electronica.me * self.dxe_dell()
         return num / self.m(ell)
 
+    # --- tapón trasero: detrás de la electrónica, desde x_r0(ℓ) hacia popa
+    def x_r0(self, ell) -> float:
+        el = self.caso.electronica
+        return float(self.x_e(ell)) + el.Le + el.holgura
+
+    def ell2_max(self, ell) -> float:
+        return max(self.cav.x_fin_cavidad - self.caso.lastre.margen_popa - self.x_r0(ell), 0.0)
+
+    def V_tras(self, ell, ell2):
+        a = self.x_r0(ell)
+        return self.fll * self.cav.vol(a, a + np.asarray(ell2, dtype=float))
+
+    def m_con_trasero(self, ell, ell2):
+        return self.m(ell) + self.rho_b * self.V_tras(ell, ell2)
+
+    def x_CG_con_trasero(self, ell, ell2):
+        a = self.x_r0(ell)
+        M_tras = self.rho_b * self.fll * self.cav.mom(a, a + np.asarray(ell2, dtype=float))
+        return (self.x_CG(ell) * self.m(ell) + M_tras) / self.m_con_trasero(ell, ell2)
+
+    def ell2_por_SM(self, ell, x_CP: float, D_ref: float, SM_min: float, tol: float) -> float:
+        """Máximo ℓ_2 ∈ [0, ℓ_2,max] con SM ≥ SM_min. El tapón trasero está detrás del CG, así
+        que SM(ℓ_2) decrece monótonamente y basta un brentq. 0 si ni ℓ_2 = 0 cumple."""
+        l2max = self.ell2_max(ell)
+
+        def g(l2):
+            return (x_CP - float(self.x_CG_con_trasero(ell, l2))) / D_ref - SM_min
+
+        if l2max <= 0 or g(0.0) < 0:
+            return 0.0
+        if g(l2max) >= 0:
+            return l2max
+        return brentq(g, 0.0, l2max, xtol=tol)
+
     def ell_de_masa(self, m_obj: float, tol: float) -> float:
         """Resuelve ρ_b ∀_b(ℓ) = m_obj en [0, ℓ_cavidad]; NaN si no cabe en la cavidad."""
         ell_c = self.ell_cavidad

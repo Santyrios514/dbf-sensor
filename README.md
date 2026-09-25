@@ -63,13 +63,15 @@ Opciones comunes: `--solo id1,id2`, `--rellenos plomo_macizo,W90_macizo`, `--sin
 | `or_aletas.csv` | polígono global de la aleta tal como lo aceptó OpenRocket (`origen` = punto \| superficie) |
 | `or_perfiles.csv` | r_e(x) muestreado de OpenRocket |
 | `resultados.csv` | una fila por configuración × relleno. `_geo` = límite geométrico; sin sufijo = ℓ_SM,max |
-| `presupuestos.csv` | para cada masa objetivo de lastre: ℓ, `no_cabe`, CG, SM y trim. **Es la salida de diseño** |
+| `optimo.csv` | **ranking por el criterio del equipo: máxima masa de lastre con SM ≥ SM_min**, por relleno, solo entre las configuraciones que caben en la bahía (`optimizacion.exigir`). `limitante_masa` dice si la masa la limita el SM o la geometría |
+| `presupuestos.csv` | para cada masa objetivo de lastre: ℓ delantero, ℓ trasero, `no_cabe`, CG, SM y trim |
 | `masas_capas.csv`, `curvas/`, `ventanas.csv` | detalle por capa, curvas ℓ → CG/SM/trim y todos los intervalos que cumplen el SM |
 
 Figuras (`figs/`):
-- `sm_inf__*`, `sm_max__*` y `masa_SM_min__*`: curvas de diseño frente a `h_tip`, una serie por
-  `extension`; el marcador hueco indica que no cabe en la bahía.
-- `perfil__*`: perfil, capas, polígono de aleta, lastre útil y x_CP.
+- `masa_max__*`, `sm_inf__*`, `sm_max__*` y `masa_SM_min__*`: curvas de diseño frente a
+  `h_tip`, una serie por `extension` y una figura por valor de los demás parámetros (p. ej.
+  `lastre_trasero`); el marcador hueco indica que no cabe en la bahía.
+- `perfil__*`: perfil, capas, polígono de aleta, lastre útil (delantero y trasero), electrónica y x_CP.
 - `cg_sm__*`: x_CG(ℓ) y SM(ℓ).
 
 ### Banderas
@@ -87,32 +89,66 @@ Figuras (`figs/`):
 
 `cabe_largo`, `cabe_alto` y `cabe_ancho` quedan vacíos si falta el dato de la bahía.
 
-## Resultados del barrido (OpenRocket 24.12, M = 0.0897, SM_min = 1.5)
+## Criterio de optimización: máxima masa con SM ≥ 1
 
-Cifras de `data/resultados.csv` con la configuración actual:
+El criterio del equipo es **maximizar la masa de lastre sin que el SM baje de `SM_min_cal` = 1.0**.
+Para cada configuración y relleno, el óptimo se construye así:
 
-| h_tip [mm] | extension [mm] | x_CP [mm] | $SM_\infty$ (Pb) | SM máx. Pb | SM máx. W90 | h_env [mm] |
-|---|---|---|---|---|---|---|
-| 20 | 40 (**base**) | 157.0 | 1.82 | **1.42** ✗ | 1.54 | 101.5 |
-| 20 | 20 | 142.2 | 1.61 | 1.23 ✗ | 1.34 ✗ | 101.5 |
-| 30 | 20 | 201.3 | 2.52 | 2.12 | 2.24 | 121.5 |
-| 30 | 40 | 217.1 | 2.74 | 2.33 | 2.45 | 121.5 |
-| 40 | 0 | 182.3 | 2.24 | 1.86 | 1.97 | 141.5 ✗ |
-| 40 | 40 | 250.8 | 3.25 | 2.83 | 2.96 | 141.5 ✗ |
+1. **Tapón delantero** desde la nariz hasta ℓ_SM,max: lo que permitan el SM o la geometría
+   (la electrónica va detrás y debe terminar antes de la cola). Este lastre suma masa **y**
+   adelanta el CG.
+2. **Tapón trasero** (`lastre.lastre_trasero: true`), solo si el delantero llegó a ℓ_geo:
+   detrás de la electrónica, desde su final hacia popa, hasta que SM = SM_min o se acabe la
+   cavidad. Suma masa pero atrasa el CG.
 
-1. **El diseño base no cumple SM = 1.5 con plomo.** Llega a 1.42 como máximo; con W90 alcanza
-   1.54, en una ventana estrecha de ℓ entre 39 y 69 mm. La causa es la aleta, no el volumen.
-2. **La palanca es `h_tip`.** El C_Nα de la aleta escala con el cuadrado del span. Pasar de 20 a
-   30 mm sube el SM máximo de 1.42 a 2.1–2.3 cal.
-3. **La bahía limita `h_tip` a 30.3 mm en configuración +.** $h_{env} = 2(r_{LE} + h) \le 122$ mm
-   da $h \le 30.26$ mm; con 30 mm quedan 0.5 mm de holgura. **Girar las aletas 45° (X)** reduce
-   el alto a $\sqrt2\,r_{tip}$ y permite $h$ ≈ 55 mm, si el ancho de la bahía lo admite.
-   Para evaluarlo: `aletas.rotacion_deg: [0, 45]` en el barrido, y definir `envolvente.ancho_max_mm`.
-4. **La extensión detrás de la base ayuda mucho.** Sin ella, el CP se adelanta entre 64 y 79 mm.
-5. **Longitud:** L_total va de 350 a 390 mm, más que el `largo_max_mm` = 340 de la v1. Hay que
-   confirmar el largo real de la bahía.
-6. **Trim:** con x_T = 0.15 L, α_trim sale de decenas de grados. El amarre tiene que ir
-   prácticamente en el CG (`x_T_trim_cero_mm`, ≈ 105 mm con lastre).
+El orden importa. Mientras el tapón delantero pueda crecer, pasar volumen de atrás hacia adelante
+sube el SM con la misma masa; por eso en el óptimo el delantero está lleno o no hay trasero. Como
+el tapón trasero queda detrás del CG, SM(ℓ₂) es monótona y el límite se halla con un `brentq`.
+
+## Resultados (OpenRocket 24.12, M = 0.0897, SM_min = 1.0, plomo en la cola permitido)
+
+La bahía **no es un dato**: el ejercicio sirve para fijarla. `optimo.csv` reporta para cada
+diseño el alto y el ancho que exige (`h_env_mm`, `w_env_mm`, sección con aletas incluidas). Solo
+se filtra por el alto conocido (122 mm). Barrido: `h_tip` × `extension` × rotación (+ a 0°, X a 45°).
+
+**Frontera masa / SM / tamaño de bahía (plomo):**
+
+| Diseño (h_tip / ext. / rotación) | Masa de lastre | SM | Bahía (alto × ancho) | Comentario |
+|---|---|---|---|---|
+| 30 / 40 / X | 6 816 g | 1.00 | **85.9 × 85.9 mm** | bahía mínima; sin margen de SM |
+| **40 / 40 / X** | **6 944 g** (cavidad llena) | **1.46** | **100.0 × 100.0 mm** | **recomendado**: masa máxima con margen |
+| 50 / 40 / X | 6 944 g | 1.78 | 114.2 × 114.2 mm | puesto 1 del ranking; la bahía extra solo compra SM |
+| 30 / 40 / + | 6 816 g | 1.00 | 121.5 × 121.5 mm | dominado por la versión X |
+| 20 / 40 / + (base) | 4 116 g | 1.00 | 101.5 × 101.5 mm | aleta chica: el SM limita |
+
+Con W90, los mismos diseños dan 10 272 g (30/40) y 10 410 g (cavidad llena).
+
+1. **La masa máxima físicamente posible es la cavidad llena:** 612 cm³, es decir 6.94 kg de plomo
+   o 10.4 kg de W90. Se alcanza con h_tip ≥ 40 mm y tapón trasero. Por encima de eso, más aleta
+   solo aumenta el SM.
+2. **Las aletas en X dominan a las de +:** con la misma aleta, a 45° la sección mide
+   $\sqrt2\,r_{tip}$ en vez de $2 r_{tip}$ (−29 %). Con la misma bahía caben aletas más grandes.
+3. **Para fijar el ancho:** una bahía cuadrada de **100 mm** (más la holgura de montaje y el
+   medio espesor de aleta, 0.9 mm) admite el diseño 40/40/X. Da la masa máxima con SM 1.46, un
+   margen de ~0.46 cal frente a la incertidumbre del CP. Bajar a 86 mm cuesta solo 128 g
+   (−1.8 %) pero deja SM = 1.00 justo.
+4. **Diseño base (h_tip = 20):** el SM limita a 4.1 kg con plomo y no admite tapón trasero.
+5. **Longitud:** L_total va de 350 a 390 mm, más que el `largo_max_mm` = 340 de la v1. El largo
+   de la bahía también sale de aquí: 390 mm con extensión 40, 370 mm con extensión 20.
+
+### Advertencias sobre el óptimo
+
+- **SM = 1.00 exacto no deja margen para la incertidumbre del CP.** El CP de OpenRocket es optimista
+  (advertencia *jagged*) y el Barrowman interno difiere 0.5–3 mm. Con el tapón trasero, cada 0.1 cal
+  de margen cuesta ≈ 230 g de plomo. Para reservarlo, basta subir `SM_min_cal`, por ejemplo a 1.15.
+- **Trim y punto de remolque.** Con 7–10 kg, el peso domina la aerodinámica:
+  $m g \approx 70$–$104$ N frente a $q S_{ref} C_{N\alpha} \approx 8$ N/rad. Para α_trim ≤ 5° el
+  amarre debe quedar a **±0.4–0.6 mm del CG** con h_tip = 30 y SM = 1, o a ±1–2 mm con
+  h_tip = 40–50, que dejan más SM. Los α_trim del CSV con x_T = 0.15 L (cientos de grados) solo dicen que ese amarre es
+  inviable: fuera del rango lineal no son ángulos físicos. El amarre va en `x_T_trim_cero_mm`
+  (≈ 152–156 mm con tapón trasero) y debe ser **ajustable**.
+- **Cargas:** un sensor de 7–10 kg multiplica las cargas en el cable, el winch, la compuerta y el
+  casco de PLA durante el despliegue. Hay que verificarlas contra el presupuesto de masa (v2 §10.4).
 
 ### OpenRocket frente al modelo interno
 
@@ -161,11 +197,11 @@ Cifras de `data/resultados.csv` con la configuración actual:
 |---|---|---|
 | Electrónica (largo, diámetro, masa, posición) | 100 mm, 150 g, detrás del lastre | ℓ_SM,min, ℓ_geo, x_CG. **Conviene exigir que empiece en el tramo cilíndrico** |
 | Punto de remolque y herraje | x_T = 0.15 L, 15 g en x = 40 mm | trim (`alpha_trim_*`, `x_T_trim_cero_mm`) |
-| SM_min | 1.5 cal | ventana, banderas, figuras |
+| SM_min | 1.0 cal (criterio: máxima masa con SM ≥ 1) | óptimo de masa, ventana, banderas. Conviene agregar margen por incertidumbre del CP |
 | Presupuesto de masa | 250–1500 g | `presupuestos.csv` |
 | Material y espesor de aletas | MAT_PARED_EQ, 1.8 mm | m_aletas, CG en vacío |
 | Popa abierta o cerrada | abierta | mamparo de base, masa |
-| Ancho de la bahía (y largo real) | null (340 mm de la v1) | `cabe_ancho`, `cabe_largo`, viabilidad de las aletas a 45° |
+| Ancho y largo de la bahía | **salida del ejercicio** (`w_env_mm`, `h_env_mm`, `L_total_mm`) | recomendado: 100 × 100 mm de sección y 390 mm de largo (diseño 40/40/X) |
 
 ## Notas de fabricación
 

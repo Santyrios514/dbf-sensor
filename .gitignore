@@ -216,3 +216,9 @@ __marimo__/
 
 # Streamlit
 .streamlit/secrets.toml
+
+# --- sensor_lastre ---
+data/*
+!data/ejemplos/
+figs/*
+!figs/.gitkeep

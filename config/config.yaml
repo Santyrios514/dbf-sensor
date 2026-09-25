@@ -1,0 +1,130 @@
+# Única fuente de parámetros del modelo de lastre del sensor remolcado.
+# Unidades de E/S: longitud en mm, masa en g, densidad en kg/m^3, ángulos en grados.
+unidades: {longitud: mm, masa: g, densidad: kg/m3}
+
+materiales:                     # densidad en kg/m^3
+  PLA: 1240
+  PETG: 1270
+  ABS: 1050
+  PA12: 1010
+  fibra_vidrio_epoxy: 1850
+  fibra_carbono_epoxy: 1550
+  balsa: 160
+  contrachapado_abedul: 680
+  epoxy: 1150
+  plomo: 11340
+  tungsteno_puro: 19250
+  tungsteno_aleacion_W90: 17000
+  bismuto: 9780
+  acero: 7850
+  laton: 8500
+
+rellenos:                       # candidatos a evaluar
+  - {nombre: plomo_macizo,   material: plomo}
+  - {nombre: W90_macizo,     material: tungsteno_aleacion_W90}
+  - {nombre: bismuto_macizo, material: bismuto}
+  - {nombre: acero_macizo,   material: acero}
+  - {nombre: perdigon_pb_epoxy, material: plomo, granular: {empaquetamiento: 0.62, matriz: epoxy}}
+
+geometria_base:
+  nariz:
+    forma: elipsoide            # conica | elipsoide | ogiva_tangente | potencia | haack
+    parametro: null             # n (potencia) o C (haack)
+    longitud: {modo: relativo_D, valor: 1.0}   # absoluto_mm | relativo_D | relativo_L
+  cola:
+    forma: conica               # conica | ogiva | parabolica
+    longitud: {modo: relativo_D, valor: 1.0}
+    diametro_popa: {modo: relativo_D, valor: 0.6}
+    popa_cerrada: true
+  aletas:
+    n: 4
+    cuerda_raiz: {modo: relativo_L, valor: 0.25}
+    cuerda_punta: {modo: relativo_L, valor: 0.10}
+    semienvergadura: {modo: relativo_D, valor: 0.8}
+    flecha: {modo: borde_salida_recto}      # o {modo: absoluto_mm, valor: ...}
+    espesor_mm: 2.0
+    material: PLA
+    fraccion_solida: 1.0
+    borde_salida_desde_popa_mm: 0.0
+
+pared:                          # capas de AFUERA hacia ADENTRO
+  por_defecto:
+    - {material: fibra_vidrio_epoxy, espesor_mm: 0.3, fraccion_solida: 1.0}
+    - {material: PLA,                espesor_mm: 1.5, fraccion_solida: 1.0}
+  nariz: null                   # null = usa por_defecto; o lista propia
+  cuerpo: null
+  cola: null
+
+mamparos: []                    # posición del borde delantero; ejemplo:
+  # - {x: {modo: relativo_L, valor: 0.5}, espesor_mm: 3.0, material: PLA}
+
+electronica:
+  longitud_mm: 100
+  masa_g: 150
+  modo: detras_del_lastre       # detras_del_lastre | fija
+  x_inicio_mm: null             # solo si modo = fija
+  holgura_mm: 2.0
+  x_cg_relativo_mm: null        # CG propio medido desde x_e; null = centro
+
+masas_puntuales:
+  - {nombre: herraje_remolque, masa_g: 15, x: {modo: absoluto_mm, valor: 40}}
+
+lastre:
+  x_inicio: auto                # auto | {modo: absoluto_mm, valor: ...}
+  r_min_util_mm: 3.0
+  factor_llenado: 1.0
+  fraccion_max_L: 0.6           # null = sin límite
+  permitir_en_cola: false
+  margen_cola_mm: 5.0
+  zonas_prohibidas: []          # [{desde_mm:..., hasta_mm:...}]
+
+estabilidad:
+  SM_min_cal: 1.5
+  SM_max_cal: null
+
+condiciones_vuelo:
+  V_m_s: 30.0
+  rho_aire: isa                 # número en kg/m^3 o "isa"
+  altitud_m: 1495               # Medellín
+  aoa_deg: 0.0
+
+remolque:
+  x_T: {modo: relativo_L, valor: 0.15}      # absoluto_mm | relativo_L | en_CG
+
+envolvente:
+  largo_max_mm: 340
+  diametro_max_mm: 122
+
+presupuesto_masa:
+  lastre_g: [250, 500, 750, 1000, 1500]
+
+barrido:                        # producto cartesiano -> configuraciones
+  L_mm: [270, 350, 400]
+  D_mm: [60, 65, 70]
+
+configuraciones: {}             # overrides explícitos por id; se SUMAN al barrido
+  # C350_65_ogiva:
+  #   L_mm: 350
+  #   D_mm: 65
+  #   nariz: {forma: ogiva_tangente}
+
+openrocket:
+  ork_base: modelos/sensor_base.ork
+  jar: null                     # null -> ORLAB_JAR o caché de orlab
+  nombres_componentes: {nariz: Nariz, cuerpo: Cuerpo, cola: Cola, aletas: Aletas}
+  n_muestras_perfil: 800
+  cna_diferencias: {activar: true, delta_aoa_deg: 1.0}
+
+verificacion:                   # umbrales de los criterios de la sección 8.3
+  dif_CP_max_frac_L: 0.05
+  dif_masa_or_max_frac: 0.03
+
+numerico:
+  dx_mm: 0.1
+  n_barrido_ell: 600
+  tol_raiz_mm: 0.01
+
+salida:
+  dir_datos: data
+  dir_figuras: figs
+  figuras: true

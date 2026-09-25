@@ -54,6 +54,7 @@ class Cola:
     Lt: float
     Ra: float
     popa: str  # abierta | cerrada
+    recortada: bool = True  # clipped de OpenRocket; solo afecta a elipsoide, potencia y haack
 
     @property
     def popa_cerrada(self) -> bool:
@@ -388,7 +389,8 @@ def _resolver_caso(cid: str, L_mm: float, D_mm: float, sec: dict, rellenos, erro
     popa = c.get("popa", "abierta")
     if popa not in ("abierta", "cerrada"):
         errores.append(f"cola.popa '{popa}' no válida (abierta | cerrada)")
-    cola = Cola(forma=forma_c, parametro=param_c, Lt=Lt, Ra=Ra, popa=popa)
+    cola = Cola(forma=forma_c, parametro=param_c, Lt=Lt, Ra=Ra, popa=popa,
+                recortada=bool(c.get("recortada", True)))
 
     if not Ln > 0:
         errores.append(f"L_n debe ser > 0 (vale {Ln / MM:.2f} mm)")

@@ -39,6 +39,7 @@ geometria_base:
   cola:
     forma: parabolica           # conica | ogiva | elipsoide | potencia | parabolica | haack
     parametro: 1.0
+    recortada: true             # 'clipped' de OpenRocket (defecto); solo elipsoide/potencia/haack
     longitud: {modo: relativo_D, valor: 1.0}          # 65 mm
     diametro_popa: {modo: relativo_D, valor: 0.6}     # 39 mm
     popa: abierta               # abierta | cerrada   # PENDIENTE (§10.6)

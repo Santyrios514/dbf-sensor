@@ -238,15 +238,20 @@ def barrowman_freeform(g: GeomAleta, A_ref: float, mach: float, n_franjas: int) 
     `FinSet.getSpan()` de OpenRocket. La cuerda de cada franja va del borde de ataque al de
     salida (incluye huecos), el área que entra en C_Nα es el área real del polígono y el ángulo
     de flecha es el de la línea de cuerdas medias, promediado por franjas.
+
+    Como FinSetCalc, las cuerdas se cortan solo contra la polilínea de puntos P0 → … → Pk, sin
+    el cierre por la superficie de la cola: la franja de aleta entre la raíz curva y la cuerda
+    no aporta. Así se reproduce OpenRocket 24.12 en el barrido (x_CP de aletas < 0.6 mm,
+    C_Nα < 7 %); cerrando por la superficie el C_Nα salía hasta 12 % bajo con extensión 0.
     """
-    P = g.poligono - np.array([g.x_LE, g.r_LE])  # local
+    P = g.puntos  # local, polilínea abierta
     y_lo = g.R_a - g.r_LE
     y_hi = g.h
     span = y_hi - y_lo
     ys = np.linspace(y_lo, y_hi, n_franjas)
     lead = np.full(n_franjas, np.inf)
     trail = np.full(n_franjas, -np.inf)
-    for (x1, y1), (x2, y2) in zip(P, np.roll(P, -1, axis=0)):
+    for (x1, y1), (x2, y2) in zip(P[:-1], P[1:]):
         if abs(y2 - y1) < 1e-12:
             continue
         lo, hi = min(y1, y2), max(y1, y2)
@@ -254,7 +259,7 @@ def barrowman_freeform(g: GeomAleta, A_ref: float, mach: float, n_franjas: int) 
         x = x1 + (ys[m] - y1) * (x2 - x1) / (y2 - y1)
         lead[m] = np.minimum(lead[m], x)
         trail[m] = np.maximum(trail[m], x)
-    ok = np.isfinite(lead) & np.isfinite(trail)
+    ok = np.isfinite(lead) & np.isfinite(trail) & (trail > lead)
     c = np.where(ok, trail - lead, 0.0)
     lead = np.where(ok, lead, 0.0)
     dy = span / (n_franjas - 1)

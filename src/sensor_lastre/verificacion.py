@@ -42,6 +42,7 @@ class ValoresOrk:
     fin_offset_bottom: float
     fin_puntos: list[tuple[float, float]]
     rho: dict[str, float] = field(default_factory=dict)  # por componente
+    recortada: bool | None = None  # solo si la forma de la cola es recortable
 
 
 def valores_desde_xml(ork: OrkXML, nombres: dict[str, str]) -> ValoresOrk:
@@ -64,6 +65,7 @@ def valores_desde_xml(ork: OrkXML, nombres: dict[str, str]) -> ValoresOrk:
         forma_cola=FORMA_OR_A_YAML[t.campos["shape"]], param_cola=param(t), popa_abierta=not cerrada,
         fin_n=int(f.num("fincount")), fin_t=f.num("thickness"), fin_rot=f.num("rotation"),
         fin_offset_bottom=f.num("axialoffset"), fin_puntos=list(f.puntos),
+        recortada=(t.campos["shapeclipped"] == "true") if "shapeclipped" in t.campos else None,
         rho={k: comp.densidad for k, comp in zip(("nariz", "cuerpo", "cola", "aletas"), (n, c, t, f))},
     )
 
@@ -93,6 +95,8 @@ def comparar(v: ValoresOrk, caso: Caso, tol: float, tol_rel_rho: float = 1e-3,
         dif.append(f"cola.forma: .ork = {v.forma_cola}, config = {g.cola.forma}")
     if v.param_cola is not None:
         chk("cola.parametro", v.param_cola, g.cola.parametro, 1e-9)
+    if v.recortada is not None and v.recortada != g.cola.recortada:
+        dif.append(f"cola.recortada: .ork = {v.recortada}, config = {g.cola.recortada}")
     if v.popa_abierta != (g.cola.popa == "abierta"):
         dif.append(f"cola.popa: .ork abierta = {v.popa_abierta}, config = {g.cola.popa}")
     for est, t_or in (("nariz", v.t_nariz), ("cuerpo", v.t_cuerpo), ("cola", v.t_cola)):

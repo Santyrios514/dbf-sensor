@@ -31,6 +31,7 @@ def _caso_cilindro(raw, modo_e="detras_del_lastre"):
     raw["geometria_base"]["nariz"].update(forma="conica", longitud={"modo": "absoluto_mm", "valor": 20})
     raw["lastre"].update(x_inicio={"modo": "absoluto_mm", "valor": 30}, fraccion_max_L=None)
     raw["electronica"]["modo"] = modo_e
+    raw["lastre"]["lastre_trasero"] = modo_e == "detras_del_lastre"  # el tapón trasero exige electrónica detrás
     if modo_e == "fija":
         raw["electronica"]["x_inicio_mm"] = 250
     cfg = cargar(solo(raw, 350, 65))
@@ -241,7 +242,7 @@ def test_SM_descomposicion_exacta(raw):
 
 def test_banderas_por_geometria_y_margen(raw):
     raw["estabilidad"]["SM_min_cal"] = 1.5
-    raw["barrido"]["parametros"].pop("lastre.lastre_trasero")
+    raw["barrido"]["parametros"].pop("aletas.rotacion_deg")
     cfg = cargar(raw)
     plomo = cfg.rellenos[0]
     f = analizar_caso(cfg.caso("L350_D65_h_tip20_extension0"), rellenos=[plomo]).rellenos[0].fila
@@ -346,3 +347,14 @@ def test_ranking_filtra_y_ordena():
     })
     r = ranking(df, ["cabe_alto", "cabe_ancho"])
     assert list(r["config_id"]) == ["b", "a"] and list(r["puesto"]) == [1, 2]
+
+
+def test_ranking_desempata_por_SM_y_bahia():
+    import pandas as pd
+    from sensor_lastre.optimizacion import ranking
+    df = pd.DataFrame({
+        "config_id": ["a", "b", "c"], "relleno": ["pb"] * 3, "m_relleno_g": [6944.2, 6943.9, 6944.0],
+        "SM_cal": [1.2, 1.5, 1.5], "w_env_mm": [100, 114, 100], "h_env_mm": [100, 114, 100],
+        "cabe_alto": [True] * 3, "cabe_ancho": [None] * 3,
+    })
+    assert list(ranking(df, ["cabe_alto"])["config_id"]) == ["c", "b", "a"]

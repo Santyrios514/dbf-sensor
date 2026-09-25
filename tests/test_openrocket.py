@@ -98,7 +98,7 @@ def test_perfil_nariz_vs_openrocket(puente, forma, p):
 def export(tmp_path_factory):
     d = tmp_path_factory.mktemp("or")
     r = subprocess.run([sys.executable, str(RAIZ / "scripts" / "01_orlab_export.py"),
-                        "--solo", "base_ork,L350_D65_h_tip30_extension20_lastre_trasero0,L350_D65_h_tip40_extension0_lastre_trasero0",
+                        "--solo", "base_ork,L350_D65_h_tip30_extension20_rotacion_deg0,L350_D65_h_tip40_extension0_rotacion_deg0",
                         "--dir-datos", str(d)], capture_output=True, text=True, timeout=600)
     assert r.returncode == 0, r.stdout + r.stderr
     return d
@@ -113,8 +113,8 @@ def test_esquemas_script1(export):
     assert res["mach_usado"].iloc[0] == pytest.approx(0.0897, abs=1e-3)  # no 0.3
     # la advertencia de perfil irregular (escalón P4–P5) se conserva; sin extensión no hay escalón
     jag = res.set_index("config_id")["or_warnings"].fillna("").str.contains("Jagged")
-    assert jag["base_ork"] and jag["L350_D65_h_tip30_extension20_lastre_trasero0"]
-    assert not jag["L350_D65_h_tip40_extension0_lastre_trasero0"]
+    assert jag["base_ork"] and jag["L350_D65_h_tip30_extension20_rotacion_deg0"]
+    assert not jag["L350_D65_h_tip40_extension0_rotacion_deg0"]
 
 
 def test_integracion_vs_modelo_interno(export):

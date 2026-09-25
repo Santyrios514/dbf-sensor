@@ -105,31 +105,36 @@ El orden importa. Mientras el tapón delantero pueda crecer, pasar volumen de at
 sube el SM con la misma masa; por eso en el óptimo el delantero está lleno o no hay trasero. Como
 el tapón trasero queda detrás del CG, SM(ℓ₂) es monótona y el límite se halla con un `brentq`.
 
-## Resultados (OpenRocket 24.12, M = 0.0897, SM_min = 1.0)
+## Resultados (OpenRocket 24.12, M = 0.0897, SM_min = 1.0, plomo en la cola permitido)
 
-Óptimos de `data/optimo.csv` (plomo; todas caben en alto en configuración +, h_env ≤ 121.5 mm):
+La bahía **no es un dato**: el ejercicio sirve para fijarla. `optimo.csv` reporta para cada
+diseño el alto y el ancho que exige (`h_env_mm`, `w_env_mm`, sección con aletas incluidas). Solo
+se filtra por el alto conocido (122 mm). Barrido: `h_tip` × `extension` × rotación (+ a 0°, X a 45°).
 
-| Puesto | h_tip / ext. [mm] | Tapón trasero | Masa de lastre | SM | Limita |
-|---|---|---|---|---|---|
-| 1 | 30 / 40 | sí | **6 816 g** (1 613 atrás) | 1.00 | SM |
-| 2 | 30 / 20 | sí | 6 236 g (1 033 atrás) | 1.00 | SM |
-| 3 | 30 / 20 | no | 5 203 g | 1.46 | geometría |
-| 4 | 30 / 40 | no | 5 203 g | 1.70 | geometría |
-| 5 | 20 / 40 (base) | — | 4 116 g | 1.00 | SM |
+**Frontera masa / SM / tamaño de bahía (plomo):**
 
-Con W90 el óptimo es la misma geometría: **10 272 g** de lastre (2 471 g atrás).
+| Diseño (h_tip / ext. / rotación) | Masa de lastre | SM | Bahía (alto × ancho) | Comentario |
+|---|---|---|---|---|
+| 30 / 40 / X | 6 816 g | 1.00 | **85.9 × 85.9 mm** | bahía mínima; sin margen de SM |
+| **40 / 40 / X** | **6 944 g** (cavidad llena) | **1.46** | **100.0 × 100.0 mm** | **recomendado**: masa máxima con margen |
+| 50 / 40 / X | 6 944 g | 1.78 | 114.2 × 114.2 mm | puesto 1 del ranking; la bahía extra solo compra SM |
+| 30 / 40 / + | 6 816 g | 1.00 | 121.5 × 121.5 mm | dominado por la versión X |
+| 20 / 40 / + (base) | 4 116 g | 1.00 | 101.5 × 101.5 mm | aleta chica: el SM limita |
 
-1. **Sin tapón trasero, el SM deja de ser la restricción activa.** Con h_tip ≥ 30 y extensión,
-   el lastre se corta en ℓ_geo = 175.9 mm por la electrónica y sobran 0.46–0.73 cal de margen.
-   Se usa la mitad de la cavidad (459 de 920 cm³).
-2. **El tapón trasero convierte ese margen en masa:** +31 % con plomo (5.2 → 6.8 kg). Con
-   h_tip = 30 / ext. 40 se llega al 98 % del máximo físico de la cavidad (612 cm³ ⇒ 6.94 kg de plomo).
-3. **Aletas en X (45°).** Con h_tip = 40–50 mm la cavidad se llena del todo (6.94 kg de plomo,
-   10.4 kg de W90) y **aún sobra SM** (1.47–1.80). A 45° el alto es $\sqrt2\,r_{tip}$ = 100–114 mm
-   y cabe en 122 mm. Falta el **ancho** de la bahía (`envolvente.ancho_max_mm`) para confirmarlo.
+Con W90, los mismos diseños dan 10 272 g (30/40) y 10 410 g (cavidad llena).
+
+1. **La masa máxima físicamente posible es la cavidad llena:** 612 cm³, es decir 6.94 kg de plomo
+   o 10.4 kg de W90. Se alcanza con h_tip ≥ 40 mm y tapón trasero. Por encima de eso, más aleta
+   solo aumenta el SM.
+2. **Las aletas en X dominan a las de +:** con la misma aleta, a 45° la sección mide
+   $\sqrt2\,r_{tip}$ en vez de $2 r_{tip}$ (−29 %). Con la misma bahía caben aletas más grandes.
+3. **Para fijar el ancho:** una bahía cuadrada de **100 mm** (más la holgura de montaje y el
+   medio espesor de aleta, 0.9 mm) admite el diseño 40/40/X. Da la masa máxima con SM 1.46, un
+   margen de ~0.46 cal frente a la incertidumbre del CP. Bajar a 86 mm cuesta solo 128 g
+   (−1.8 %) pero deja SM = 1.00 justo.
 4. **Diseño base (h_tip = 20):** el SM limita a 4.1 kg con plomo y no admite tapón trasero.
-5. **Longitud:** L_total va de 350 a 390 mm, más que el `largo_max_mm` = 340 de la v1. Hay que
-   confirmar el largo real de la bahía; `optimizacion.exigir` no lo incluye mientras tanto.
+5. **Longitud:** L_total va de 350 a 390 mm, más que el `largo_max_mm` = 340 de la v1. El largo
+   de la bahía también sale de aquí: 390 mm con extensión 40, 370 mm con extensión 20.
 
 ### Advertencias sobre el óptimo
 
@@ -138,10 +143,10 @@ Con W90 el óptimo es la misma geometría: **10 272 g** de lastre (2 471 g atrá
   de margen cuesta ≈ 230 g de plomo. Para reservarlo, basta subir `SM_min_cal`, por ejemplo a 1.15.
 - **Trim y punto de remolque.** Con 7–10 kg, el peso domina la aerodinámica:
   $m g \approx 70$–$104$ N frente a $q S_{ref} C_{N\alpha} \approx 8$ N/rad. Para α_trim ≤ 5° el
-  amarre debe quedar a **±0.4–0.6 mm del CG** con h_tip = 30 (±1–2 mm con h_tip = 40–50, que dejan
-  más SM). Los α_trim del CSV con x_T = 0.15 L (cientos de grados) solo dicen que ese amarre es
+  amarre debe quedar a **±0.4–0.6 mm del CG** con h_tip = 30 y SM = 1, o a ±1–2 mm con
+  h_tip = 40–50, que dejan más SM. Los α_trim del CSV con x_T = 0.15 L (cientos de grados) solo dicen que ese amarre es
   inviable: fuera del rango lineal no son ángulos físicos. El amarre va en `x_T_trim_cero_mm`
-  (≈ 152 mm con tapón trasero) y debe ser **ajustable**.
+  (≈ 152–156 mm con tapón trasero) y debe ser **ajustable**.
 - **Cargas:** un sensor de 7–10 kg multiplica las cargas en el cable, el winch, la compuerta y el
   casco de PLA durante el despliegue. Hay que verificarlas contra el presupuesto de masa (v2 §10.4).
 
@@ -196,7 +201,7 @@ Con W90 el óptimo es la misma geometría: **10 272 g** de lastre (2 471 g atrá
 | Presupuesto de masa | 250–1500 g | `presupuestos.csv` |
 | Material y espesor de aletas | MAT_PARED_EQ, 1.8 mm | m_aletas, CG en vacío |
 | Popa abierta o cerrada | abierta | mamparo de base, masa |
-| Ancho de la bahía (y largo real) | null (340 mm de la v1) | `cabe_ancho`, `cabe_largo`, viabilidad de las aletas a 45° |
+| Ancho y largo de la bahía | **salida del ejercicio** (`w_env_mm`, `h_env_mm`, `L_total_mm`) | recomendado: 100 × 100 mm de sección y 390 mm de largo (diseño 40/40/X) |
 
 ## Notas de fabricación
 

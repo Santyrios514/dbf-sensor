@@ -11,7 +11,8 @@ y cuántas de las variantes de aletas son factibles.
         [--sin-figuras]
 
 Salidas (en dir_datos):
-    comparacion_LD.csv           una fila por relleno × (L, D)
+    comparacion_LD.csv           una fila por relleno × (L, D); incluye la caja mínima acostada
+                                 (L_total · D_acostado²) y los kg de lastre por litro de esa caja
     comparacion_LD_pivote.csv    masa máxima [g] de cada relleno en una tabla L × D
 Figura (en dir_figuras): comparacion_LD__{relleno}.png
 """
@@ -33,7 +34,7 @@ from sensor_lastre.optimizacion import ranking  # noqa: E402
 
 COLUMNAS = ["relleno", "L_mm", "D_mm", "L_total_mm", "n_variantes", "n_factibles", "frac_factibles",
             "m_relleno_max_g", "m_total_g", "costo_relleno_usd", "SM_cal", "tol_amarre_mm",
-            "D_acostado_mm", "D_parado_mm", "cabe_largo", "limitante_masa", "config_mejor",
+            "D_acostado_mm", "D_parado_mm", "V_caja_acostado_L", "kg_por_L_caja", "cabe_largo", "limitante_masa", "config_mejor",
             "V_int_cm3", "m_casco_g", "SM_inf_max_cal", "puesto_LD"]
 
 
@@ -77,6 +78,9 @@ def comparar(res: pd.DataFrame, exigir) -> pd.DataFrame:
                         ("D_parado_mm", "D_parado_mm"), ("cabe_largo", "cabe_largo"),
                         ("limitante_masa", "limitante_masa"), ("config_mejor", "config_id")]:
         out[c_out] = mejor[c_in]
+    # caja mínima con el sensor acostado (aletas a 45°: alto = ancho = D_acostado); no depende de la bahía
+    out["V_caja_acostado_L"] = out["L_total_mm"] * out["D_acostado_mm"] ** 2 * 1e-6
+    out["kg_por_L_caja"] = out["m_relleno_max_g"] / 1000 / out["V_caja_acostado_L"]
     out = out.reset_index()
     out = out.sort_values(["relleno", "m_relleno_max_g", "SM_cal", "D_acostado_mm"],
                           ascending=[True, False, False, True], na_position="last", kind="stable")
@@ -113,7 +117,8 @@ def _figura(res: pd.DataFrame, comp: pd.DataFrame, relleno: str, exigir, alto_ma
             if np.isfinite(f["m_relleno_max_g"]):
                 txt = (f"{f['m_relleno_max_g'] / 1000:.2f} kg\nSM {f['SM_cal']:.2f}\n"
                        f"D_ac {f['D_acostado_mm']:.0f} mm\n{f['n_factibles']}/{f['n_variantes']} fact.\n"
-                       f"L_tot {f['L_total_mm']:.0f} mm{_largo(f['cabe_largo'])}")
+                       f"L_tot {f['L_total_mm']:.0f} mm{_largo(f['cabe_largo'])}\n"
+                       f"{f['kg_por_L_caja']:.2f} kg/L caja")
             else:
                 txt = f"sin factibles\n0/{f['n_variantes']}"
             oscuro = np.isfinite(f["m_relleno_max_g"]) and f["m_relleno_max_g"] / 1000 > 0.6 * vmax
@@ -171,8 +176,9 @@ def main(argv=None) -> int:
     for rel, c in comp.groupby("relleno", sort=False):
         print(f"\n=== {rel}  (exigido: {', '.join(exigir) or 'nada'})")
         print(c[["puesto_LD", "L_mm", "D_mm", "m_relleno_max_g", "SM_cal", "D_acostado_mm", "D_parado_mm",
-                 "n_factibles", "n_variantes", "costo_relleno_usd", "config_mejor"]]
-              .to_string(index=False, float_format=lambda v: f"{v:.1f}"))
+                 "V_caja_acostado_L", "kg_por_L_caja", "n_factibles", "n_variantes", "costo_relleno_usd",
+                 "config_mejor"]]
+              .to_string(index=False, float_format=lambda v: f"{v:.2f}"))
 
     if not a.sin_figuras:
         for rel in ([a.relleno] if a.relleno else comp["relleno"].unique()):

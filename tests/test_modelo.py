@@ -1,5 +1,6 @@
 """Modelo completo (sección 8.2) y piezas de Fase B: Barrowman, ventana, trim."""
 
+import copy
 import math
 
 import numpy as np
@@ -87,7 +88,7 @@ def test_ventana_toca_SM_min(raw):
 
 
 def test_SM_max_acota_la_ventana(raw):
-    raw["estabilidad"]["SM_max_cal"] = 1.7
+    raw["estabilidad"].update(SM_min_cal=1.5, SM_max_cal=1.7)
     cfg = cargar(solo(_aletas_efectivas(raw), 350, 65))
     rr = analizar_caso(cfg.casos[0], rellenos=[cfg.rellenos[0]]).rellenos[0]
     sm = rr.curva["SM_cal"].to_numpy()
@@ -239,6 +240,8 @@ def test_SM_descomposicion_exacta(raw):
 
 
 def test_banderas_por_geometria_y_margen(raw):
+    raw["estabilidad"]["SM_min_cal"] = 1.5
+    raw["barrido"]["parametros"].pop("lastre.lastre_trasero")
     cfg = cargar(raw)
     plomo = cfg.rellenos[0]
     f = analizar_caso(cfg.caso("L350_D65_h_tip20_extension0"), rellenos=[plomo]).rellenos[0].fila
@@ -262,3 +265,84 @@ def test_dif_masa_alta(raw):
     malo = dict(ok, cola=2 * ok["cola"])  # p. ej. transición marcada Filled en el .ork
     res = analizar_caso(caso, rellenos=[cfg.rellenos[0]], masas_or=malo, tol=Tolerancias.desde(cfg.verificacion))
     assert "dif_masa_alta" in res.banderas
+
+
+# --------------------------------------------------------------------------- criterio: máxima masa
+
+
+def _caso_opt(raw, trasero, h=30, e=40, SM_min=1.0):
+    raw["geometria_base"]["aletas"]["h_tip"]["valor"] = h
+    raw["geometria_base"]["aletas"]["extension"]["valor"] = e
+    raw["lastre"]["lastre_trasero"] = trasero
+    raw["estabilidad"]["SM_min_cal"] = SM_min
+    cfg = cargar(solo(raw, 350, 65))
+    return cfg.casos[0], cfg.rellenos[0]
+
+
+def test_tapon_trasero_llena_hasta_SM_min(raw):
+    caso, plomo = _caso_opt(raw, True)
+    f = analizar_caso(caso, rellenos=[plomo]).rellenos[0].fila
+    assert f["limitante_masa"] == "SM"
+    assert f["SM_cal"] == pytest.approx(1.0, abs=1e-4)
+    assert f["ell_SM_max_mm"] == pytest.approx(f["ell_geo_mm"])  # el delantero se llenó primero
+    assert 0 < f["ell_trasero_mm"] and f["m_relleno_trasero_g"] > 0
+
+
+def test_tapon_trasero_nunca_reduce_masa(raw):
+    c0, plomo = _caso_opt(copy.deepcopy(raw), False)
+    c1, _ = _caso_opt(copy.deepcopy(raw), True)
+    f0 = analizar_caso(c0, rellenos=[plomo]).rellenos[0].fila
+    f1 = analizar_caso(c1, rellenos=[plomo]).rellenos[0].fila
+    assert f0["limitante_masa"] == "geometria" and f0["SM_cal"] > 1.0
+    assert f1["m_relleno_g"] > f0["m_relleno_g"]
+    assert f1["m_relleno_g"] - f1["m_relleno_trasero_g"] == pytest.approx(f0["m_relleno_g"], rel=1e-9)
+
+
+def test_tapon_trasero_sin_margen_de_SM(raw):
+    """Aletas débiles: el SM limita al delantero antes de ℓ_geo y no se agrega lastre trasero."""
+    caso, plomo = _caso_opt(raw, True, h=20, e=20)
+    f = analizar_caso(caso, rellenos=[plomo]).rellenos[0].fila
+    assert f["limitante_masa"] == "SM" and f["ell_trasero_mm"] == 0
+    assert f["ell_SM_max_mm"] < f["ell_geo_mm"]
+
+
+def test_tapon_trasero_llena_la_cola_si_sobra_SM(raw):
+    caso, plomo = _caso_opt(raw, True, h=50, e=40)
+    rr = analizar_caso(caso, rellenos=[plomo]).rellenos[0]
+    f, mod = rr.fila, rr.modelo
+    assert f["limitante_masa"] == "geometria" and f["SM_cal"] > 1.0
+    assert f["ell_trasero_mm"] * MM == pytest.approx(mod.ell2_max(rr.ventana.ell_SM_max))
+
+
+def test_optimo_con_SM_min_maximiza_masa(raw):
+    """Barrer ℓ_2 a mano: ninguna ℓ_2 mayor que la elegida cumple SM ≥ 1."""
+    caso, plomo = _caso_opt(raw, True)
+    rr = analizar_caso(caso, rellenos=[plomo]).rellenos[0]
+    mod, ell1 = rr.modelo, rr.ventana.ell_SM_max
+    x_CP, D = rr.fila["x_CP_mm"] * MM, caso.geom.D
+    ell2 = rr.fila["ell_trasero_mm"] * MM
+    for l2 in np.linspace(ell2 + 0.1 * MM, mod.ell2_max(ell1), 20):
+        assert (x_CP - float(mod.x_CG_con_trasero(ell1, l2))) / D < 1.0
+
+
+def test_presupuesto_usa_tapon_trasero(raw):
+    raw["presupuesto_masa"]["lastre_g"] = [1000, 6000, 20000]
+    caso, plomo = _caso_opt(raw, True)
+    pres = analizar_caso(caso, rellenos=[plomo]).rellenos[0].presupuestos
+    p1, p6, p20 = pres
+    assert p1["ell_trasero_mm"] == 0 and not p1["no_cabe"]
+    assert p6["ell_trasero_mm"] > 0 and not p6["no_cabe"]  # 6 kg > 5.2 kg que caben adelante
+    assert p6["m_total_g"] - p1["m_total_g"] == pytest.approx(5000, abs=0.5)  # la masa pedida se respeta
+    assert p20["no_cabe"]
+
+
+def test_ranking_filtra_y_ordena():
+    import pandas as pd
+    from sensor_lastre.optimizacion import ranking
+    df = pd.DataFrame({
+        "config_id": ["a", "b", "c", "d"], "relleno": ["pb"] * 4,
+        "m_relleno_g": [5000, 7000, np.nan, 9000],
+        "cabe_alto": [True, True, True, False], "cabe_ancho": [None, None, None, None],
+    })
+    r = ranking(df, ["cabe_alto", "cabe_ancho"])
+    assert list(r["config_id"]) == ["b", "a"] and list(r["puesto"]) == [1, 2]

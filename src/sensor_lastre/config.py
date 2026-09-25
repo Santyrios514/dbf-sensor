@@ -125,6 +125,8 @@ class Lastre:
     permitir_en_cola: bool
     margen_cola: float
     zonas_prohibidas: tuple[tuple[float, float], ...]
+    trasero: bool = False  # tapón trasero detrás de la electrónica (hasta el final de la cavidad)
+    margen_popa: float = 0.0  # distancia libre entre el tapón trasero y el final de la cavidad
 
 
 @dataclass(frozen=True)
@@ -484,7 +486,10 @@ def _resolver_caso(cid: str, L_mm: float, D_mm: float, sec: dict, rellenos, erro
         fmax=None if fmax is None else float(fmax),
         permitir_en_cola=bool(la.get("permitir_en_cola", False)),
         margen_cola=float(la.get("margen_cola_mm", 0.0)) * MM, zonas_prohibidas=tuple(zonas),
+        trasero=bool(la.get("lastre_trasero", False)), margen_popa=float(la.get("margen_popa_mm", 0.0)) * MM,
     )
+    if lastre.trasero and electronica.modo != "detras_del_lastre":
+        errores.append("lastre.lastre_trasero requiere electronica.modo = detras_del_lastre")
 
     # --- estabilidad
     es = sec["estabilidad"]

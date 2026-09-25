@@ -99,6 +99,15 @@ def fig_perfil(res: ResultadoCaso, rr: ResultadoRelleno | None, ruta: Path):
         m = (cav.x >= a0) & (cav.x <= b0)
         ax.fill_between(x[m], 0, cav.r_i[m] / MM, color=AZUL, alpha=0.55, lw=0,
                         label=f"lastre útil ({rr.relleno.nombre})")
+        ell2 = rr.fila.get("ell_trasero_mm", 0.0) * MM
+        if ell2 > 0:
+            a2 = rr.modelo.x_r0(rr.ventana.ell_SM_max)
+            m2 = (cav.x >= a2) & (cav.x <= a2 + ell2)
+            ax.fill_between(x[m2], 0, cav.r_i[m2] / MM, color=AZUL, alpha=0.55, lw=0)
+        el = caso.electronica
+        x_e = float(rr.modelo.x_e(rr.ventana.ell_SM_max))
+        ax.axvspan(x_e / MM, (x_e + el.Le) / MM, ymax=0.3, color=AQUA, alpha=0.35, lw=0,
+                   label="electrónica")
     b_geo = res.x_b0 + res.lim.ell_geo
     ax.axvline(b_geo / MM, color=NARANJA, lw=1.2, ls="--")
     ax.annotate("ℓ_geo", (b_geo / MM, caso.geom.R / MM), textcoords="offset points",
@@ -141,12 +150,22 @@ def fig_barrido(resultados: pd.DataFrame, valores: pd.DataFrame, rutas: list[str
     if not rutas:
         return
     px, ps = _eje_x(rutas)
+    resto = [r for r in rutas if r not in (px, ps)]  # parámetros extra: una figura por combinación
     df = resultados.merge(valores, on="config_id")
+    grupos_fig = df.groupby(resto, sort=True) if resto else [((), df)]
+    for clave, dfr in grupos_fig:
+        clave = clave if isinstance(clave, tuple) else (clave,)
+        sufijo = "".join(f"__{_etiqueta(r).split('.')[-1]}{v}" for r, v in zip(resto, clave))
+        _fig_barrido_grupo(dfr, px, ps, SM_min, dir_fig, sufijo)
+
+
+def _fig_barrido_grupo(df, px, ps, SM_min, dir_fig, sufijo):
     for rel, d in df.groupby("relleno", sort=False):
         for col, archivo, titulo, ref in (
             ("SM_inf_cal", "sm_inf", "SM_∞ (techo por geometría) [cal]", SM_min),
             ("SM_max_alcanzable_cal", "sm_max", "SM máximo alcanzable con este relleno [cal]", SM_min),
-            ("m_lastre_SM_min_g", "masa_SM_min", f"Masa de lastre para SM = {SM_min:g} cal [g]", None),
+            ("m_lastre_SM_min_g", "masa_SM_min", f"Masa de lastre mínima para SM = {SM_min:g} cal [g]", None),
+            ("m_relleno_g", "masa_max", f"Masa MÁXIMA de lastre con SM ≥ {SM_min:g} cal [g]", None),
         ):
             if col not in d:
                 continue
@@ -174,7 +193,8 @@ def fig_barrido(resultados: pd.DataFrame, valores: pd.DataFrame, rutas: list[str
             ax.set_xlabel(f"{_etiqueta(px)} [mm]")
             ax.set_title(titulo, loc="left")
             ax.margins(x=0.18)
-            fig.suptitle(f"{rel} · marcador hueco: no cabe en la bahía (alto)", x=0.01, ha="left",
+            fig.suptitle(f"{rel}{sufijo.replace('__', ' · ')} · marcador hueco: no cabe en la bahía (alto)",
+                         x=0.01, ha="left",
                          fontsize=9, color=TINTA2)
-            fig.savefig(dir_fig / f"{archivo}__{rel}.png", dpi=150)
+            fig.savefig(dir_fig / f"{archivo}__{rel}{sufijo}.png", dpi=150)
             plt.close(fig)

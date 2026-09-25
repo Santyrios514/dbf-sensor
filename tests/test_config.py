@@ -11,10 +11,13 @@ from conftest import CONFIG, barrido, solo
 def test_carga_barrido_v2():
     cfg = cargar(CONFIG)
     ids = [c.id for c in cfg.casos]
-    assert len(ids) == 4 * 3 + 1
-    assert ids[0] == "L350_D65_h_tip20_extension0" and ids[-1] == "base_ork"
-    c = cfg.caso("L350_D65_h_tip30_extension20")
-    assert c.barrido == {"aletas.h_tip.valor": 30, "aletas.extension.valor": 20}
+    assert len(ids) == 4 * 3 * 2 + 1
+    assert ids[0] == "L350_D65_h_tip20_extension0_lastre_trasero0" and ids[-1] == "base_ork"
+    c = cfg.caso("L350_D65_h_tip30_extension20_lastre_trasero1")
+    assert c.barrido == {"aletas.h_tip.valor": 30, "aletas.extension.valor": 20,
+                         "lastre.lastre_trasero": True}
+    assert c.lastre.trasero and not cfg.caso("L350_D65_h_tip30_extension20_lastre_trasero0").lastre.trasero
+    assert c.estabilidad.SM_min == 1.0  # criterio del equipo: máxima masa con SM ≥ 1
     assert c.params_aleta.h == pytest.approx(0.030)
     assert c.params_aleta.e == pytest.approx(0.020)
     assert c.geom.L == pytest.approx(0.350)

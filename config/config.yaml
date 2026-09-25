@@ -90,9 +90,14 @@ lastre:
   permitir_en_cola: false
   margen_cola_mm: 5.0
   zonas_prohibidas: []          # [{desde_mm:..., hasta_mm:...}]
+  lastre_trasero: false         # segundo tapón detrás de la electrónica (cola); se llena hasta SM = SM_min
+  margen_popa_mm: 0.0           # hueco libre al final de la cavidad para el tapón trasero
+
+optimizacion:                   # criterio: máxima masa de lastre con SM ≥ SM_min
+  exigir: [cabe_alto, cabe_ancho]   # banderas de envolvente que deben ser verdaderas (null = sin dato → no filtra)
 
 estabilidad:
-  SM_min_cal: 1.5               # PENDIENTE (§10.3)
+  SM_min_cal: 1.0               # criterio del equipo: máxima masa con SM ≥ 1
   SM_max_cal: null
   umbral_margen_bajo_cal: 0.3
 
@@ -122,6 +127,7 @@ barrido:                        # cualquier ruta del YAML (primero secciones, lu
     D_mm: [65]
     aletas.h_tip.valor: [20, 30, 40, 50]
     aletas.extension.valor: [0, 20, 40]
+    lastre.lastre_trasero: [false, true]
 
 configuraciones:                # overrides explícitos por id; se SUMAN al barrido
   base_ork:                     # idéntica al .ork de referencia (regresión y comparación)

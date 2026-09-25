@@ -7,6 +7,7 @@ from dataclasses import dataclass, field
 
 import numpy as np
 import pandas as pd
+from scipy.optimize import brentq
 
 from .aletas import envolvente
 from .barrowman import ResultadoCP, cp_interno
@@ -214,13 +215,31 @@ def _analizar_relleno(res: ResultadoCaso, rel: Relleno) -> ResultadoRelleno:
             fila["m_lastre_SM_min_g"] = float(mod.m_b(ventana.ell_SM_min)) / G
         ell_u = ventana.ell_SM_max
         if math.isfinite(ell_u):
-            Vu = float(mod.V_b(ell_u))
-            xcg_u = float(mod.x_CG(ell_u))
+            # Óptimo de masa con SM ≥ SM_min. Primero el tapón delantero (suma masa y adelanta el
+            # CG); solo si llega a ℓ_geo, el tapón trasero detrás de la electrónica hasta SM = SM_min.
+            ell2 = 0.0
+            lleno = ell_u >= ell_geo - nu.tol
+            if caso.lastre.trasero and lleno:
+                ell2 = mod.ell2_por_SM(ell_u, x_CP, D_ref, es.SM_min, nu.tol)
+            V1 = float(mod.V_b(ell_u))
+            V2 = float(mod.V_tras(ell_u, ell2))
+            Vu = V1 + V2
+            m_u = float(mod.m_con_trasero(ell_u, ell2))
+            xcg_u = float(mod.x_CG_con_trasero(ell_u, ell2))
+            if not lleno:
+                limitante = "SM"
+            elif caso.lastre.trasero:
+                limitante = "SM" if ell2 < mod.ell2_max(ell_u) - nu.tol else "geometria"
+            else:
+                limitante = "geometria"
             fila.update({
                 "V_util_cm3": Vu / CM3, "eta_int": Vu / V_int, "eta_ext": Vu / V_ext,
-                "m_relleno_g": rel.rho_b * Vu / G, "m_total_g": float(mod.m(ell_u)) / G,
+                "m_relleno_g": rel.rho_b * Vu / G, "m_total_g": m_u / G,
                 "x_CG_mm": xcg_u / MM, "SM_cal": SM(xcg_u), "x_T_mm": x_T_de(xcg_u) / MM,
-                "alpha_trim_deg": float(trim_deg(ell_u)), "x_T_trim_cero_mm": xcg_u / MM,
+                "alpha_trim_deg": float(np.degrees(alpha_trim(m_u, xcg_u, x_T_de(xcg_u), x_CP, vu.q,
+                                                              S_ref, CNa))),
+                "x_T_trim_cero_mm": xcg_u / MM, "ell_trasero_mm": ell2 / MM,
+                "m_relleno_trasero_g": rel.rho_b * V2 / G, "limitante_masa": limitante,
             })
         ells = np.linspace(0.0, ell_geo, nu.n_ell)
         xcg = mod.x_CG(ells)
@@ -235,15 +254,28 @@ def _analizar_relleno(res: ResultadoCaso, rel: Relleno) -> ResultadoRelleno:
             banderas.append("inestable_respecto_remolque")
 
     presupuestos = []
+    m_del_max = float(mod.m_b(ell_geo)) if ell_geo > 0 else 0.0
     for m_obj in caso.presupuesto:
-        ell = mod.ell_de_masa(m_obj, nu.tol)
-        no_cabe = (not math.isfinite(ell)) or ell > ell_geo
+        ell, ell2 = mod.ell_de_masa(m_obj, nu.tol), 0.0
+        if caso.lastre.trasero and ell_geo > 0 and m_obj > m_del_max:
+            # el delantero se llena hasta ℓ_geo y el resto va detrás de la electrónica
+            resto = m_obj - m_del_max
+            l2max = mod.ell2_max(ell_geo)
+            if rel.rho_b * float(mod.V_tras(ell_geo, l2max)) >= resto:
+                ell = ell_geo
+                ell2 = brentq(lambda l2: rel.rho_b * float(mod.V_tras(ell_geo, l2)) - resto, 0.0, l2max,
+                              xtol=nu.tol)
+            else:
+                ell = math.nan
+        no_cabe = (not math.isfinite(ell)) or ell > ell_geo + nu.tol
         p = {"config_id": caso.id, "relleno": rel.nombre, "m_lastre_obj_g": m_obj / G,
-             "ell_mm": ell / MM, "no_cabe": bool(no_cabe)}
+             "ell_mm": ell / MM, "ell_trasero_mm": ell2 / MM, "no_cabe": bool(no_cabe)}
         if math.isfinite(ell):
-            xcg = float(mod.x_CG(ell))
-            p.update({"m_total_g": float(mod.m(ell)) / G, "x_CG_mm": xcg / MM, "SM_cal": SM(xcg),
-                      "alpha_trim_deg": float(trim_deg(ell))})
+            m_p = float(mod.m_con_trasero(ell, ell2))
+            xcg = float(mod.x_CG_con_trasero(ell, ell2))
+            p.update({"m_total_g": m_p / G, "x_CG_mm": xcg / MM, "SM_cal": SM(xcg),
+                      "alpha_trim_deg": float(np.degrees(alpha_trim(m_p, xcg, x_T_de(xcg), x_CP, vu.q,
+                                                                    S_ref, CNa)))})
         presupuestos.append(p)
 
     fila["banderas"] = _txt(banderas)

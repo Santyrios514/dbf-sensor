@@ -151,6 +151,15 @@ def main(argv=None) -> int:
     _escribir(pd.DataFrame(capas), esquemas.MASAS_CAPAS, dir_datos / "masas_capas.csv")
     _escribir(pd.DataFrame(presup), esquemas.PRESUPUESTOS, dir_datos / "presupuestos.csv")
     _escribir(pd.DataFrame(ventanas), esquemas.VENTANAS, dir_datos / "ventanas.csv")
+    from sensor_lastre.optimizacion import ranking
+    exigir = (cfg.raw.get("optimizacion") or {}).get("exigir") or []
+    opt = ranking(pd.read_csv(dir_datos / "resultados.csv"), exigir)
+    _escribir(opt, esquemas.OPTIMO, dir_datos / "optimo.csv")
+    print(f"\nÓptimo (máxima masa de lastre con SM ≥ {casos[0].estabilidad.SM_min:g}, exigiendo {exigir}):")
+    for rel, d in opt[opt["puesto"] == 1].groupby("relleno", sort=False):
+        f = d.iloc[0]
+        print(f"  {rel:>18}: {f['config_id']}  m_lastre = {f['m_relleno_g']:.0f} g  "
+              f"(trasero {f['m_relleno_trasero_g']:.0f} g)  SM = {f['SM_cal']:.2f}  límite: {f['limitante_masa']}")
     if figuras and len(resultados):
         from sensor_lastre.figuras import fig_barrido
         fig_barrido(resultados, pd.DataFrame(valores), list(cfg.parametros_barrido),

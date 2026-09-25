@@ -1,0 +1,186 @@
+# Variante de config.yaml para el barrido de L_cuerpo × D (solo cambian L_mm, D_mm, nariz/cola
+# en mm absolutos y las carpetas de salida).
+# Única fuente de parámetros del modelo de lastre del sensor remolcado (spec v1 + v2).
+# Unidades de E/S: longitud en mm, masa en g, densidad en kg/m^3, ángulos en grados.
+# Los valores marcados "# PENDIENTE" son supuestos a confirmar con el equipo (v2 §10).
+unidades: {longitud: mm, masa: g, densidad: kg/m3}
+
+materiales:                     # densidad en kg/m^3
+  MAT_PARED_EQ: 1342            # tal como está en el .ork (pared bicapa equivalente)
+  PLA: 1240
+  PETG: 1270
+  ABS: 1050
+  PA12: 1010
+  fibra_vidrio_epoxy: 1850
+  fibra_carbono_epoxy: 1550
+  balsa: 160
+  contrachapado_abedul: 680
+  epoxy: 1150
+  plomo: 11340
+  tungsteno_puro: 19250
+  tungsteno_aleacion_W90: 17000
+  bismuto: 9780
+  acero: 7850
+  laton: 8500
+
+costos_usd_kg:                  # APROXIMADOS (2026, compra minorista de pocos kg, solo material,
+  plomo: 4                      # sin mecanizado, fundición ni envío). Ajustar con cotizaciones reales.
+  tungsteno_aleacion_W90: 150   # barra de aleación pesada W-Ni-Fe; la pieza mecanizada cuesta más
+  tungsteno_puro: 120
+  bismuto: 25
+  acero: 3
+  laton: 10
+  epoxy: 30
+
+rellenos:                       # candidatos a evaluar (costo_usd_kg opcional: sobrescribe costos_usd_kg)
+  - {nombre: plomo_macizo,   material: plomo}
+  - {nombre: W90_macizo,     material: tungsteno_aleacion_W90}
+  - {nombre: bismuto_macizo, material: bismuto}
+  - {nombre: acero_macizo,   material: acero}
+  - {nombre: perdigon_pb_epoxy, material: plomo,
+     granular: {empaquetamiento: 0.62, matriz: epoxy, costo_grano_usd_kg: 6}}   # perdigón > lingote
+
+geometria_base:
+  longitud_referencia: cuerpo   # cuerpo | total. "L_mm" del barrido se interpreta así.
+  nariz:
+    forma: elipsoide            # conica | elipsoide | ogiva_tangente | ogiva | potencia | parabolica | haack
+    parametro: null
+    longitud: {modo: absoluto_mm, valor: 65.0}        # fija: L y D solo cambian el tubo / los radios
+  cuerpo:
+    longitud: auto              # L_cuerpo − L_n − L_t
+  cola:
+    forma: parabolica           # conica | ogiva | elipsoide | potencia | parabolica | haack
+    parametro: 1.0
+    recortada: true             # 'clipped' de OpenRocket (defecto); solo elipsoide/potencia/haack
+    longitud: {modo: absoluto_mm, valor: 65.0}        # fija (las aletas están dimensionadas sobre ella)
+    diametro_popa: {modo: relativo_D, valor: 0.6}     # 39 mm
+    popa: abierta               # abierta | cerrada   # PENDIENTE (§10.6)
+    mamparo_popa: {espesor_mm: 2.0, material: PLA}   # solo si popa = cerrada
+  aletas:
+    tipo: freeform_cola
+    n: 4
+    rotacion_deg: 0
+    c_r:       {modo: absoluto_mm, valor: 41.10}      # o {modo: relativo_Lt, valor: 0.632}
+    x_tip_le:  {modo: absoluto_mm, valor: 40.00}
+    h_tip:     {modo: absoluto_mm, valor: 20.00}      # o {modo: r_tip_absoluto_mm, valor: 50.74}
+    extension: {modo: absoluto_mm, valor: 39.98}
+    r_interior_mm: 0.63
+    offset_bottom_mm: 0.02
+    epsilon_mm: 0.08            # el .ork usa ≈ 0.08 mm (P4.x − P5.x)
+    espesor_mm: 1.8             # PENDIENTE (§10.5)
+    material: MAT_PARED_EQ      # PENDIENTE (§10.5): pensado para la pared; ¿PLA macizo?
+    fraccion_solida: 1.0
+    descontar_solape_eje: false
+
+pared:                          # capas de AFUERA hacia ADENTRO (ρ_eq = 1342 kg/m³ = MAT_PARED_EQ)
+  por_defecto:
+    - {material: fibra_vidrio_epoxy, espesor_mm: 0.3, fraccion_solida: 1.0}
+    - {material: PLA,                espesor_mm: 1.5, fraccion_solida: 1.0}
+  nariz: null                   # null = usa por_defecto; o lista propia
+  cuerpo: null
+  cola: null
+
+mamparos: []                    # posición del borde delantero; ejemplo:
+  # - {x: {modo: relativo_L, valor: 0.5}, espesor_mm: 3.0, material: PLA}
+
+electronica:                    # PENDIENTE (§10.1)
+  longitud_mm: 100
+  masa_g: 150
+  modo: detras_del_lastre       # detras_del_lastre | fija
+  x_inicio_mm: null             # solo si modo = fija
+  holgura_mm: 2.0
+  x_cg_relativo_mm: null        # CG propio medido desde x_e; null = centro
+
+masas_puntuales:                # PENDIENTE (§10.2): herraje de remolque
+  - {nombre: herraje_remolque, masa_g: 15, x: {modo: absoluto_mm, valor: 40}}
+
+lastre:
+  x_inicio: auto                # auto | {modo: absoluto_mm, valor: ...}
+  r_min_util_mm: 3.0
+  factor_llenado: 1.0
+  fraccion_max_L: 0.6           # null = sin límite
+  permitir_en_cola: false
+  margen_cola_mm: 5.0
+  zonas_prohibidas: []          # [{desde_mm:..., hasta_mm:...}]
+  lastre_trasero: true          # segundo tapón detrás de la electrónica (cola); se llena hasta SM = SM_min
+  margen_popa_mm: 0.0           # hueco libre al final de la cavidad para el tapón trasero
+
+optimizacion:                   # criterio: máxima masa de lastre con SM ≥ SM_min
+  exigir: [cabe_alto, cabe_ancho]   # banderas de envolvente que deben ser verdaderas (null = sin dato → no filtra)
+
+estabilidad:
+  SM_min_cal: 1.0               # criterio del equipo: máxima masa con SM ≥ 1
+  SM_max_cal: null
+  umbral_margen_bajo_cal: 0.3
+
+condiciones_vuelo:
+  V_m_s: 30.0
+  rho_aire: isa                 # número en kg/m^3 o "isa"
+  altitud_m: 1495               # Medellín
+  aoa_deg: 0.0
+  mach: auto                    # auto = V / a(h); un número lo fuerza
+  mach_regresion_or: 0.3        # solo para el test de regresión (v2 §1.4)
+
+remolque:                       # PENDIENTE (§10.2): posición real del herraje
+  x_T: {modo: en_CG}            # en_CG | absoluto_mm | relativo_L. En el CG el trim estático es 0
+  alpha_trim_max_deg: 5.0       # trim admisible → tol_amarre_mm (error permitido de x_T respecto al CG)
+  alpha_lineal_max_deg: 15.0    # por encima, la fórmula lineal de trim no es válida → trim_no_lineal
+
+envolvente:                     # la bahía guarda el sensor ACOSTADO con las aletas en diagonal
+  largo_max_mm: 340             # v1; el diseño base mide 390 mm con aletas
+  alto_max_mm: 122              # se compara con D_acostado (no con la rotación de vuelo)
+  ancho_max_mm: null            # resultado del ejercicio: se reporta D_acostado_mm (no filtra)
+  rotacion_guardado_deg: 45     # aletas diagonales al guardarlo (4 aletas: alto = √2·r_tip)
+
+presupuesto_masa:               # PENDIENTE (§10.4)
+  lastre_g: [250, 500, 750, 1000, 1500]
+
+barrido:                        # cualquier ruta del YAML (primero secciones, luego geometria_base)
+  modo: cartesiano              # cartesiano | zip
+  parametros:
+    L_mm: [270, 350, 400]       # L_cuerpo: nariz y cola fijas (65 mm), cambia solo el tubo
+    D_mm: [60, 65, 70]          # nariz y cola se escalan en radio; popa = 0.6·D
+    aletas.h_tip.valor: [20, 30, 40, 50]
+    aletas.extension.valor: [0, 20, 40]
+    aletas.rotacion_deg: [0, 45]  # + y X: fija el alto/ancho que necesita la bahía
+
+configuraciones:                # overrides explícitos por id; se SUMAN al barrido
+  base_ork:                     # idéntica al .ork de referencia (regresión y comparación)
+    L_mm: 350
+    D_mm: 65
+
+openrocket:
+  ork_base: modelos/analisis_vol_int.ork
+  jar: null                     # null -> ORLAB_JAR o caché de orlab
+  nombres_componentes:
+    nariz: Ojiva
+    cuerpo: Cuerpo
+    cola: "Transición"
+    aletas: "Aletas de forma libre"
+  n_muestras_perfil: 800
+  cna_diferencias: {activar: true, delta_aoa_deg: 1.0}
+
+verificacion:
+  dif_CP_max_frac_L: 0.05       # |x_CP,OR − x_CP,interno| / L_cuerpo
+  dif_masa_or_max_frac: 0.03    # masa por componente frente a OpenRocket
+  dif_masa_aletas_max_frac: 0.02
+  tol_geometria_ork_mm: 0.001   # verificación de la base contra el .ork
+  regresion_or:                 # v2 §1.4 (OpenRocket 24.12, M = 0.3, AoA 0)
+    masa_g: {valor: 184, tol: 1}
+    x_CG_mm: {valor: 202, tol: 1}
+    x_CP_mm: {valor: 158, tol: 1}
+    estabilidad_cal: {valor: -0.68, tol: 0.02}
+
+numerico:
+  dx_mm: 0.1
+  n_barrido_ell: 600
+  tol_raiz_mm: 0.01
+  n_superficie_aleta: 200       # muestras del tramo P5 → P0 sobre la cola
+  n_franjas_aleta: 48           # Barrowman interno de aletas (como FinSetCalc)
+  tol_superficie_aleta_mm: 0.01
+
+salida:
+  dir_datos: data/barrido_LD
+  dir_figuras: figs/barrido_LD
+  figuras: true
+  relleno_dibujo: plomo_macizo  # relleno que se dibuja en figs/dibujo__*.png

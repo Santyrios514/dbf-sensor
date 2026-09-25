@@ -134,7 +134,8 @@ def main(argv=None) -> int:
         f0 = res.rellenos[0].fila if res.rellenos else {}
         confs.append({
             "config_id": caso.id, "L_mm": caso.geom.L / MM, "L_total_mm": caso.geom.L_total / MM,
-            "D_mm": caso.geom.D / MM, "D_max_aletas_mm": f0.get("D_max_aletas_mm"),
+            "D_mm": caso.geom.D / MM, "D_acostado_mm": f0.get("D_acostado_mm"),
+            "D_parado_mm": f0.get("D_parado_mm"),
             "h_env_mm": f0.get("h_env_mm"), "w_env_mm": f0.get("w_env_mm"), "aletas_n": g_a.params.n,
             "aleta_h_tip_mm": g_a.h / MM, "aleta_extension_mm": g_a.params.e / MM,
             "aleta_rotacion_deg": math.degrees(g_a.params.rotacion), "r_tip_mm": g_a.r_tip / MM,

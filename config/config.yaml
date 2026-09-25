@@ -124,10 +124,11 @@ remolque:                       # PENDIENTE (§10.2): posición real del herraje
   alpha_trim_max_deg: 5.0       # trim admisible → tol_amarre_mm (error permitido de x_T respecto al CG)
   alpha_lineal_max_deg: 15.0    # por encima, la fórmula lineal de trim no es válida → trim_no_lineal
 
-envolvente:
+envolvente:                     # la bahía guarda el sensor ACOSTADO con las aletas en diagonal
   largo_max_mm: 340             # v1; el diseño base mide 390 mm con aletas
-  alto_max_mm: 122
-  ancho_max_mm: null            # resultado del ejercicio: se reporta w_env_mm (no filtra)
+  alto_max_mm: 122              # se compara con D_acostado (no con la rotación de vuelo)
+  ancho_max_mm: null            # resultado del ejercicio: se reporta D_acostado_mm (no filtra)
+  rotacion_guardado_deg: 45     # aletas diagonales al guardarlo (4 aletas: alto = √2·r_tip)
 
 presupuesto_masa:               # PENDIENTE (§10.4)
   lastre_g: [250, 500, 750, 1000, 1500]

@@ -162,8 +162,9 @@ class Remolque:
 @dataclass(frozen=True)
 class Envolvente:
     largo_max: float | None
-    alto_max: float | None
+    alto_max: float | None  # de la bahía, con el sensor guardado (acostado)
     ancho_max: float | None
+    rot_guardado: float = math.radians(45.0)  # aletas en diagonal al guardarlo acostado
 
 
 @dataclass(frozen=True)
@@ -543,7 +544,8 @@ def _resolver_caso(cid: str, L_mm: float, D_mm: float, sec: dict, rellenos, erro
         return None if v is None else float(v) * MM
 
     envolvente = Envolvente(largo_max=_mm_o_none("largo_max_mm"), alto_max=_mm_o_none("alto_max_mm"),
-                            ancho_max=_mm_o_none("ancho_max_mm"))
+                            ancho_max=_mm_o_none("ancho_max_mm"),
+                            rot_guardado=math.radians(float(env.get("rotacion_guardado_deg", 45.0))))
     nu = sec["numerico"]
     numerico = Numerico(
         dx=float(nu["dx_mm"]) * MM, n_ell=int(nu["n_barrido_ell"]), tol=float(nu["tol_raiz_mm"]) * MM,

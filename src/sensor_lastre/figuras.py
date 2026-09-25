@@ -227,9 +227,11 @@ def fig_dibujo(res: ResultadoCaso, rr: ResultadoRelleno | None, ruta: Path):
     x = cav.x / MM
     R, r_tip, Lt = g.R / MM, a.r_tip / MM, g.L_total / MM
     phis = pa.rotacion + 2 * np.pi * np.arange(pa.n) / pa.n  # desde la vertical
-    D_max = 2 * max(g.R, a.r_tip) / MM
+    D_parado = 2 * max(g.R, a.r_tip) / MM
     from .aletas import envolvente
-    h_env, w_env = (v / MM for v in envolvente(a.r_tip, g.R, pa.n, pa.rotacion))
+    rot_g = caso.envolvente.rot_guardado
+    h_env, w_env = (v / MM for v in envolvente(a.r_tip, g.R, pa.n, rot_g))  # guardado, acostado
+    phis_g = rot_g + 2 * np.pi * np.arange(pa.n) / pa.n
 
     fig, (al, af) = plt.subplots(1, 2, figsize=(12.5, 4.6), gridspec_kw={"width_ratios": [3.3, 1]},
                                  constrained_layout=True)
@@ -289,10 +291,10 @@ def fig_dibujo(res: ResultadoCaso, rr: ResultadoRelleno | None, ruta: Path):
     al.set_title(f"Vista lateral · aletas a {np.degrees(pa.rotacion):.0f}°", loc="left", fontsize=9)
     al.legend(frameon=False, loc="upper left", fontsize=8, ncol=2)
 
-    # --- vista frontal (desde la nariz): aletas como placas de espesor t, cuerpo encima
+    # --- vista frontal (desde la nariz), GUARDADO acostado: aletas en diagonal, cuerpo encima
     t = pa.t / MM
     r_in = pa.r_in / MM
-    for phi in phis:
+    for phi in phis_g:
         u = np.array([np.sin(phi), np.cos(phi)])  # dirección radial (x horizontal, y vertical)
         n = np.array([u[1], -u[0]])
         c = [r_in * u + t / 2 * n, r_tip * u + t / 2 * n, r_tip * u - t / 2 * n, r_in * u - t / 2 * n]
@@ -300,12 +302,12 @@ def fig_dibujo(res: ResultadoCaso, rr: ResultadoRelleno | None, ruta: Path):
         af.fill(c[:, 0], c[:, 1], color=AMARILLO, alpha=0.8, ec=TINTA2, lw=0.8)
     af.add_patch(plt.Circle((0, 0), R, fc="#e4e3df", ec=TINTA, lw=1.1))
     af.add_patch(plt.Circle((0, 0), g.cola.Ra / MM, fc="none", ec=TINTA2, lw=0.6, ls=":"))
-    af.add_patch(plt.Circle((0, 0), D_max / 2, fc="none", ec=NARANJA, lw=1.0, ls="--"))
+    af.add_patch(plt.Circle((0, 0), D_parado / 2, fc="none", ec=NARANJA, lw=1.0, ls="--"))
     af.add_patch(plt.Rectangle((-w_env / 2, -h_env / 2), w_env, h_env, fc="none", ec=AZUL, lw=1.2, ls="--"))
-    lim = max(D_max, h_env, w_env) / 2 * 1.32
-    _cota_h(af, -w_env / 2, w_env / 2, -h_env / 2 - lim * 0.12, f"ancho {w_env:.1f}", AZUL)
-    _cota_v(af, -w_env / 2 - lim * 0.1, -h_env / 2, h_env / 2, f"alto {h_env:.1f}", AZUL)
-    af.text(0, lim * 0.93, f"D máx. con aletas = {D_max:.1f} mm", ha="center", va="top", fontsize=8,
+    lim = max(D_parado, h_env, w_env) / 2 * 1.32
+    _cota_h(af, -w_env / 2, w_env / 2, -h_env / 2 - lim * 0.12, f"{w_env:.1f}", AZUL)
+    _cota_v(af, -w_env / 2 - lim * 0.1, -h_env / 2, h_env / 2, f"D acostado {h_env:.1f}", AZUL)
+    af.text(0, lim * 0.93, f"D parado = {D_parado:.1f} mm", ha="center", va="top", fontsize=8,
             color=NARANJA, bbox=dict(fc=SUPERFICIE, ec="none", pad=0.5))
     af.set_xlim(-lim, lim)
     af.set_ylim(-lim, lim)
@@ -315,7 +317,7 @@ def fig_dibujo(res: ResultadoCaso, rr: ResultadoRelleno | None, ruta: Path):
     af.set_yticks([])
     for s in af.spines.values():
         s.set_visible(False)
-    af.set_title("Vista frontal · bahía (azul)", loc="left", fontsize=9)
+    af.set_title(f"Guardado acostado · aletas a {np.degrees(rot_g):.0f}°", loc="left", fontsize=9)
 
     fig.suptitle(titulo, x=0.01, ha="left", fontsize=10)
     fig.savefig(ruta, dpi=160)

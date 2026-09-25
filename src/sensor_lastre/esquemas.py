@@ -28,7 +28,7 @@ RESULTADOS = [
     "x_CP_fuente", "dx_CP_or_vs_interno_mm", "CN_alpha_rad", "x_T_mm", "alpha_trim_geo_deg",
     "alpha_trim_deg", "x_T_trim_cero_mm", "tol_amarre_mm", "m_casco_g", "A_aleta_mm2", "m_aletas_g",
     "x_CG_aletas_mm", "m_mamparos_g", "m_electronica_g", "m_puntuales_g", "dif_masa_or_pct",
-    "L_total_mm", "D_max_aletas_mm", "h_env_mm", "w_env_mm", "cabe_largo", "cabe_alto", "cabe_ancho",
+    "L_total_mm", "D_acostado_mm", "D_parado_mm", "h_env_mm", "w_env_mm", "cabe_largo", "cabe_alto", "cabe_ancho",
     "banderas",
 ]
 
@@ -43,11 +43,12 @@ CURVA = ["ell_mm", "V_b_cm3", "m_b_g", "m_total_g", "x_CG_mm", "SM_cal", "alpha_
 # Ranking por el criterio de optimización: máxima masa de lastre con SM ≥ SM_min.
 OPTIMO = ["relleno", "puesto", "config_id", "m_relleno_g", "m_relleno_trasero_g", "costo_usd_kg",
           "costo_relleno_usd", "m_total_g", "SM_cal", "limitante_masa", "ell_SM_max_mm", "ell_trasero_mm",
-          "x_CG_mm", "x_CP_mm", "x_T_trim_cero_mm", "tol_amarre_mm", "alpha_trim_deg", "D_max_aletas_mm",
-          "h_env_mm", "w_env_mm", "L_total_mm", "cabe_alto", "cabe_ancho", "cabe_largo"]
+          "x_CG_mm", "x_CP_mm", "x_T_trim_cero_mm", "tol_amarre_mm", "alpha_trim_deg", "D_acostado_mm",
+          "D_parado_mm", "h_env_mm", "w_env_mm", "L_total_mm", "cabe_alto", "cabe_ancho", "cabe_largo"]
 
 # Una fila por configuración: dimensiones exteriores (con aletas) y dibujo.
-CONFIGURACIONES = ["config_id", "L_mm", "L_total_mm", "D_mm", "D_max_aletas_mm", "h_env_mm", "w_env_mm",
+CONFIGURACIONES = ["config_id", "L_mm", "L_total_mm", "D_mm", "D_acostado_mm", "D_parado_mm", "h_env_mm",
+                   "w_env_mm",
                    "aletas_n", "aleta_h_tip_mm", "aleta_extension_mm", "aleta_rotacion_deg", "r_tip_mm",
                    "x_CP_mm", "x_CP_fuente", "dibujo"]
 

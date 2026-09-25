@@ -79,18 +79,26 @@ class ResultadoCaso:
 
 
 def banderas_envolvente(caso: Caso) -> dict:
-    """L_total, alto y ancho de la sección con aletas, y si caben en la bahía (None = sin dato)."""
+    """Dimensiones exteriores con aletas y si caben en la bahía (None = sin dato).
+
+    - h_env/w_env: sección con la rotación de VUELO (la del SM).
+    - D_acostado: sensor guardado acostado con las aletas en diagonal (`rotacion_guardado_deg`),
+      el mayor de alto y ancho de esa sección. Es lo que ocupa en la bahía.
+    - D_parado: círculo que tocan las puntas, 2·max(R, r_tip); no depende de la rotación.
+    Los chequeos cabe_alto/cabe_ancho usan la posición de guardado.
+    """
     g, a = caso.geom, caso.geom.aletas
-    h_env, w_env = envolvente(a.r_tip, g.R, a.params.n, a.params.rotacion)
     env = caso.envolvente
+    h_env, w_env = envolvente(a.r_tip, g.R, a.params.n, a.params.rotacion)
+    h_g, w_g = envolvente(a.r_tip, g.R, a.params.n, env.rot_guardado)
 
     def cabe(v, lim):
         return None if lim is None else bool(v <= lim + 1e-12)
 
-    return {"L_total_mm": g.L_total / MM, "D_max_aletas_mm": 2 * max(g.R, a.r_tip) / MM,
-            "h_env_mm": h_env / MM, "w_env_mm": w_env / MM,
-            "cabe_largo": cabe(g.L_total, env.largo_max), "cabe_alto": cabe(h_env, env.alto_max),
-            "cabe_ancho": cabe(w_env, env.ancho_max)}
+    return {"L_total_mm": g.L_total / MM, "D_acostado_mm": max(h_g, w_g) / MM,
+            "D_parado_mm": 2 * max(g.R, a.r_tip) / MM, "h_env_mm": h_env / MM, "w_env_mm": w_env / MM,
+            "cabe_largo": cabe(g.L_total, env.largo_max), "cabe_alto": cabe(h_g, env.alto_max),
+            "cabe_ancho": cabe(w_g, env.ancho_max)}
 
 
 def tolerancia_amarre(m: float, x_CG: float, x_CP: float, q: float, S_ref: float, CNa: float,

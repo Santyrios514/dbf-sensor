@@ -60,7 +60,8 @@ def test_cobertura_barrido(salida_sin_orlab):
     banderas = {b for s in res["banderas"].fillna("") for b in s.split(";") if b}
     assert banderas <= set(esquemas.BANDERAS)
     confs = pd.read_csv(salida_sin_orlab / "configuraciones.csv")
-    assert len(confs) == len(cfg.casos) and confs["D_max_aletas_mm"].notna().all()
+    assert len(confs) == len(cfg.casos) and confs["D_acostado_mm"].notna().all()
+    assert (confs["D_parado_mm"] >= confs["D_acostado_mm"] - 1e-9).all()
     assert (res["costo_relleno_usd"].dropna() >= 0).all()
     capas = pd.read_csv(salida_sin_orlab / "masas_capas.csv")
     m_por_caso = capas.groupby("config_id")["m_g"].sum()

@@ -354,7 +354,7 @@ def test_ranking_desempata_por_SM_y_bahia():
     from sensor_lastre.optimizacion import ranking
     df = pd.DataFrame({
         "config_id": ["a", "b", "c"], "relleno": ["pb"] * 3, "m_relleno_g": [6944.2, 6943.9, 6944.0],
-        "SM_cal": [1.2, 1.5, 1.5], "w_env_mm": [100, 114, 100], "h_env_mm": [100, 114, 100],
+        "SM_cal": [1.2, 1.5, 1.5], "D_acostado_mm": [100, 114, 100], "D_parado_mm": [141, 161, 141],
         "cabe_alto": [True] * 3, "cabe_ancho": [None] * 3,
     })
     assert list(ranking(df, ["cabe_alto"])["config_id"]) == ["c", "b", "a"]
@@ -388,8 +388,11 @@ def test_diametro_maximo_con_aletas(raw, rot):
     raw["geometria_base"]["aletas"]["rotacion_deg"] = rot
     caso = cargar(solo(raw, 350, 65)).casos[0]
     f = analizar_caso(caso, rellenos=[cargar(raw).rellenos[0]]).rellenos[0].fila
-    assert f["D_max_aletas_mm"] == pytest.approx(2 * caso.geom.aletas.r_tip / MM)  # no depende de la rotación
-    assert f["D_max_aletas_mm"] >= max(f["h_env_mm"], f["w_env_mm"]) - 1e-9
+    r_tip = caso.geom.aletas.r_tip / MM
+    assert f["D_parado_mm"] == pytest.approx(2 * r_tip)  # no depende de la rotación
+    assert f["D_parado_mm"] >= max(f["h_env_mm"], f["w_env_mm"]) - 1e-9
+    # guardado acostado con aletas diagonales: √2·r_tip, sea cual sea la rotación de vuelo
+    assert f["D_acostado_mm"] == pytest.approx(math.sqrt(2) * r_tip)
 
 
 def test_dibujo(raw, tmp_path):
@@ -447,3 +450,18 @@ def test_validacion_alphas_remolque(raw):
     raw["remolque"].update(alpha_trim_max_deg=20, alpha_lineal_max_deg=15)
     with pytest.raises(ConfigError, match="alpha_trim_max_deg"):
         cargar(solo(raw, 350, 65))
+
+
+def test_bahia_se_chequea_guardado_acostado(raw):
+    """h_tip = 40 en vuelo + (alto 141.5 mm) cabe guardado en diagonal (100 mm) en 122 mm."""
+    raw["geometria_base"]["aletas"].update(rotacion_deg=0)
+    raw["geometria_base"]["aletas"]["h_tip"]["valor"] = 40
+    cfg = cargar(solo(raw, 350, 65))
+    f = analizar_caso(cfg.casos[0], rellenos=[cfg.rellenos[0]]).rellenos[0].fila
+    assert f["h_env_mm"] == pytest.approx(141.48, abs=0.01)  # sección en vuelo (+)
+    assert f["D_acostado_mm"] == pytest.approx(100.04, abs=0.01)
+    assert f["cabe_alto"] is True
+    raw["envolvente"]["rotacion_guardado_deg"] = 0  # si se guardara en +, no cabría
+    cfg = cargar(solo(raw, 350, 65))
+    f = analizar_caso(cfg.casos[0], rellenos=[cfg.rellenos[0]]).rellenos[0].fila
+    assert f["cabe_alto"] is False

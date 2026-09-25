@@ -65,7 +65,7 @@ Opciones comunes: `--solo id1,id2`, `--rellenos plomo_macizo,W90_macizo`, `--sin
 | `resultados.csv` | una fila por configuración × relleno. `_geo` = límite geométrico; sin sufijo = ℓ_SM,max |
 | `optimo.csv` | **ranking por el criterio del equipo: máxima masa de lastre con SM ≥ SM_min**, por relleno, solo entre las configuraciones que caben en la bahía (`optimizacion.exigir`). `limitante_masa` dice si la masa la limita el SM o la geometría |
 | `presupuestos.csv` | para cada masa objetivo de lastre: ℓ delantero, ℓ trasero, `no_cabe`, CG, SM, trim y costo |
-| `configuraciones.csv` | una fila por configuración: L total, D, **D máx. con aletas** ($2\max(R, r_{tip})$), alto y ancho de bahía, geometría de aleta, x_CP y ruta del dibujo |
+| `configuraciones.csv` | una fila por configuración: L total, D, **D acostado** y **D parado**, sección en vuelo (h_env, w_env), geometría de aleta, x_CP y ruta del dibujo |
 | `masas_capas.csv`, `curvas/`, `ventanas.csv` | detalle por capa, curvas ℓ → CG/SM/trim y todos los intervalos que cumplen el SM |
 
 Figuras (`figs/`):
@@ -76,6 +76,18 @@ Figuras (`figs/`):
 - `dibujo__*`: **dibujo acotado de cada configuración**. Vista lateral: cuerpo, aletas proyectadas
   según la rotación, lastre y electrónica del óptimo, CG y CP. Vista frontal: D máx. con aletas y
   rectángulo de bahía. El relleno dibujado se elige en `salida.relleno_dibujo`.
+
+**Dimensiones guardado.** El sensor se guarda siempre **acostado con las aletas en diagonal**
+(`envolvente.rotacion_guardado_deg` = 45°), sin importar la rotación con que vuela. Por eso cada
+configuración reporta:
+
+- `D_acostado_mm`: lado del cuadrado que ocupa guardado, $\max(D, \sqrt2\,r_{tip})$ para 4 aletas.
+  **Contra este valor se chequea la bahía** (`cabe_alto`, `cabe_ancho`).
+- `D_parado_mm`: círculo que tocan las puntas, $2\max(R, r_{tip})$; es lo que ocupa de pie.
+- `h_env_mm`, `w_env_mm`: sección con la rotación de **vuelo**, solo como referencia.
+
+Barrowman da el mismo CP para 4 aletas en + y en X, así que la rotación de vuelo no cambia el SM
+ni la masa. En el barrido, las filas a 0° y a 45° salen iguales salvo h_env y w_env.
 
 **Costo del relleno** (`costo_usd_kg`, `costo_relleno_usd` en `resultados.csv` y `optimo.csv`):
 m_relleno × precio por kg de `costos_usd_kg`. Para el perdigón con epoxy se usa el promedio

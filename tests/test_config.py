@@ -5,7 +5,7 @@ import pytest
 from sensor_lastre.atmosfera import isa
 from sensor_lastre.config import ConfigError, cargar, deep_merge
 
-from conftest import CONFIG, barrido, solo
+from conftest import CONFIG, PERDIGON, barrido, con_rellenos, solo
 
 
 def test_carga_barrido_v2():
@@ -36,8 +36,12 @@ def test_mach_auto():
     assert c.vuelo.mach_regresion_or == 0.3
 
 
-def test_rellenos_granular():
-    cfg = cargar(CONFIG)
+def test_rellenos_del_equipo():
+    assert [r.nombre for r in cargar(CONFIG).rellenos] == ["plomo_macizo"]
+
+
+def test_rellenos_granular(raw):
+    cfg = cargar(con_rellenos(solo(raw, 350, 65), PERDIGON))
     rho = {r.nombre: r.rho_b for r in cfg.rellenos}
     assert rho["plomo_macizo"] == 11340
     assert rho["perdigon_pb_epoxy"] == pytest.approx(0.62 * 11340 + 0.38 * 1150)
@@ -105,7 +109,8 @@ def test_popa_cerrada_agrega_tapa(raw):
     (lambda r: r["pared"]["por_defecto"][1].update(espesor_mm=0), "espesor_mm"),
     (lambda r: r["lastre"].update(factor_llenado=0), "factor_llenado"),
     (lambda r: r["lastre"].update(factor_llenado=1.2), "factor_llenado"),
-    (lambda r: r["rellenos"][4]["granular"].update(empaquetamiento=1.0), "empaquetamiento"),
+    (lambda r: con_rellenos(r, {**PERDIGON, "granular": {**PERDIGON["granular"], "empaquetamiento": 1.0}}),
+     "empaquetamiento"),
     (lambda r: r["estabilidad"].update(SM_max_cal=1.0), "SM_max_cal"),
     (lambda r: r["geometria_base"]["cola"].update(forma="potencia", parametro=None), "parametro"),
     (lambda r: r["geometria_base"]["cola"].update(parametro=1.5), "K de 'parabolica'"),

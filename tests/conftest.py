@@ -18,6 +18,16 @@ def raw() -> dict:
         return copy.deepcopy(yaml.safe_load(f))
 
 
+PERDIGON = {"nombre": "perdigon_pb_epoxy", "material": "plomo",
+            "granular": {"empaquetamiento": 0.62, "matriz": "epoxy", "costo_grano_usd_kg": 6}}
+
+
+def con_rellenos(raw: dict, *extra: dict) -> dict:
+    """Agrega rellenos al del equipo (solo plomo) para probar granulares, costos, etc."""
+    raw["rellenos"] = list(raw["rellenos"]) + [dict(r) for r in extra]
+    return raw
+
+
 def barrido(raw: dict, L_mm, D_mm, **rutas) -> dict:
     """Barrido cartesiano de L × D (listas o escalares) más rutas extra; sin overrides."""
     def lista(v):

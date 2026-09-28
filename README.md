@@ -40,7 +40,7 @@ python scripts/02_volumen_lastre.py --sin-orlab  # perfiles analíticos + Barrow
 pytest
 ```
 
-Opciones comunes: `--solo id1,id2`, `--rellenos plomo_macizo,W90_macizo`, `--sin-figuras`,
+Opciones comunes: `--solo id1,id2`, `--rellenos plomo_macizo`, `--sin-figuras`,
 `--dir-datos`, `--guardar-ork` (script 1).
 
 ### Configuración (`config/config.yaml`)
@@ -143,24 +143,16 @@ se filtra por el alto conocido (122 mm). Barrido: `h_tip` × `extension` × rota
 | 30 / 40 / + | 6 816 g | 1.00 | 121.5 × 121.5 mm | dominado por la versión X |
 | 20 / 40 / + (base) | 4 116 g | 1.00 | 101.5 × 101.5 mm | aleta chica: el SM limita |
 
-Con W90, los mismos diseños dan 10 272 g (30/40) y 10 410 g (cavidad llena).
-
-Costo aproximado del relleno del diseño recomendado (40/40/X):
-
-| Relleno | Masa | US$/kg | Costo material |
-|---|---|---|---|
-| Plomo | 6.94 kg | 4 | ≈ US$ 28 |
-| Perdigón + epoxy | 4.57 kg | 7.4 | ≈ US$ 34 |
-| Bismuto | 5.99 kg | 25 | ≈ US$ 150 |
-| W90 | 10.41 kg | 150 | ≈ US$ 1 560 (más mecanizado) |
-| Acero | 4.81 kg | 3 | ≈ US$ 14 |
+El equipo fijó el **plomo macizo** como único material de lastre: `rellenos` solo lo lista a él
+(W90, bismuto, acero y perdigón + epoxy se descartaron; se pueden volver a agregar con la misma
+sintaxis). Costo aproximado del relleno del diseño recomendado (40/40/X): 6.94 kg × 4 US$/kg ≈
+**US$ 28** de material.
 
 El diámetro máximo con aletas (circunferencia de las puntas) es $2 r_{tip}$ y no depende de la
 rotación: 141.5 mm con h_tip = 40. En X la bahía necesaria es menor, 100 × 100 mm, porque las
 puntas quedan en las esquinas del rectángulo.
 
-1. **La masa máxima físicamente posible es la cavidad llena:** 612 cm³, es decir 6.94 kg de plomo
-   o 10.4 kg de W90. Se alcanza con h_tip ≥ 40 mm y tapón trasero. Por encima de eso, más aleta
+1. **La masa máxima físicamente posible es la cavidad llena:** 612 cm³, es decir 6.94 kg de plomo. Se alcanza con h_tip ≥ 40 mm y tapón trasero. Por encima de eso, más aleta
    solo aumenta el SM.
 2. **Las aletas en X dominan a las de +:** con la misma aleta, a 45° la sección mide
    $\sqrt2\,r_{tip}$ en vez de $2 r_{tip}$ (−29 %). Con la misma bahía caben aletas más grandes.
@@ -183,7 +175,7 @@ puntas quedan en las esquinas del rectángulo.
   cuánto error admite su posición:
   $$|x_{CG}-x_T| \le \frac{\alpha_{max}\,q\,S_{ref}\,C_{N\alpha}\,(x_{CP}-x_{CG})}{m\,g}$$
   Ese valor es `tol_amarre_mm`, con `alpha_trim_max_deg` = 5°. A 30 m/s sale **±1.24 mm** con plomo
-  y ±0.85 mm con W90 en el diseño 40/40/X, y ±1.96 / ±1.34 mm en 50/40/X. La tolerancia crece con
+  en el diseño 40/40/X y ±1.96 mm en 50/40/X. La tolerancia crece con
   $V^2$ y con el margen $(x_{CP}-x_{CG})$, y cae como $1/m$. El amarre debe ser **ajustable**
   (riel o perforaciones a ±5 mm de `x_T_trim_cero_mm` ≈ 152–156 mm) y calibrarse pesando el
   sensor ya armado. Si se fija x_T lejos del CG, `trim_no_lineal` avisa cuando |α| supera
@@ -247,8 +239,7 @@ puntas quedan en las esquinas del rectángulo.
 ## Notas de fabricación
 
 - **Plomo fundido (327 °C) dentro de PLA o PETG no es viable:** su transición vítrea está en
-  ~60–80 °C. El lastre se funde o mecaniza aparte y luego se inserta. Alternativas: tungsteno
-  W90 (más masa en menos longitud) o perdigón con epoxy en capas delgadas. Manipular plomo con
+  ~60–80 °C. El lastre se funde o mecaniza aparte y luego se inserta. Manipular plomo con
   guantes y no lijarlo.
 - **El lastre debe quedar retenido estructuralmente** frente al despliegue, la retracción y el
   tirón del cable.

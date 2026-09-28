@@ -30,13 +30,11 @@ costos_usd_kg:                  # APROXIMADOS (2026, compra minorista de pocos k
   laton: 10
   epoxy: 30
 
-rellenos:                       # candidatos a evaluar (costo_usd_kg opcional: sobrescribe costos_usd_kg)
+rellenos:                       # material de lastre del equipo: solo plomo macizo
   - {nombre: plomo_macizo,   material: plomo}
-  - {nombre: W90_macizo,     material: tungsteno_aleacion_W90}
-  - {nombre: bismuto_macizo, material: bismuto}
-  - {nombre: acero_macizo,   material: acero}
-  - {nombre: perdigon_pb_epoxy, material: plomo,
-     granular: {empaquetamiento: 0.62, matriz: epoxy, costo_grano_usd_kg: 6}}   # perdigón > lingote
+  # Otros rellenos se agregan con la misma sintaxis (material de la tabla de arriba, granular
+  # opcional: {empaquetamiento, matriz, costo_grano_usd_kg}); se descartaron W90, bismuto, acero
+  # y perdigón + epoxy.
 
 geometria_base:
   longitud_referencia: cuerpo   # cuerpo | total. "L_mm" del barrido se interpreta así.

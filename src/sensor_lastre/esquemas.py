@@ -57,4 +57,5 @@ CONFIGURACIONES = ["config_id", "L_mm", "L_total_mm", "D_mm", "D_acostado_mm", "
 VENTANAS = ["config_id", "relleno", "desde_mm", "hasta_mm"]
 
 BANDERAS = ("inviable_geo", "SM_inalcanzable", "SM_inalcanzable_por_geometria", "margen_SM_bajo",
-            "no_unimodal", "inestable_respecto_remolque", "trim_no_lineal", "dif_CP_alta", "dif_masa_alta")
+            "no_unimodal", "inestable_respecto_remolque", "trim_no_lineal", "dif_CP_alta", "dif_masa_alta",
+            "SM_inalcanzable_con_masa_max")

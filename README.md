@@ -63,10 +63,16 @@ Para cada configuración:
    $SM = SM_{min}$ o se acaba la cavidad. Suma masa pero atrasa el CG. Como $SM(\ell_2)$ es
    monótona, el límite se resuelve con `brentq`.
 
+3. **Tope de masa del sensor** (`lastre.masa_max_sensor_g`). Si la masa total del óptimo supera
+   el tope, el lastre se recorta a $m_{max} - m_{vacío}$ y se ubica igual (delantero primero,
+   luego trasero). Así el SM queda por encima de SM_min, y si con ese lastre no llega, se marca
+   `SM_inalcanzable_con_masa_max`. El tope sale del presupuesto de peso del avión (MTOW menos
+   vacío menos margen), documentado en el YAML.
+
 `optimo.csv` filtra las configuraciones que cumplen las banderas de `optimizacion.exigir` y las
 ordena por masa de lastre. Los empates al gramo (cavidad llena) se resuelven por mayor SM, luego
-menor D acostado y luego menor D parado. `limitante_masa` indica si la masa la limitó el SM o la
-geometría.
+menor D acostado y luego menor D parado. `limitante_masa` indica si la masa la limitó el SM, la
+geometría o el tope de masa (`masa_max_sensor`).
 
 ## Instalación
 
@@ -118,7 +124,7 @@ Es la única fuente de parámetros. Unidades: mm, g, kg/m³ y grados.
 | `geometria_base` | nariz, cuerpo, cola y aletas. Las longitudes pueden ser absolutas o relativas a D, L o L_t |
 | `pared` | capas de afuera hacia adentro, por componente o por defecto |
 | `mamparos`, `electronica`, `masas_puntuales` | masas internas y su posición |
-| `lastre` | inicio, radio mínimo útil, factor de llenado, zonas prohibidas, tapón trasero |
+| `lastre` | inicio, radio mínimo útil, factor de llenado, zonas prohibidas, tapón trasero, tope de masa del sensor |
 | `estabilidad` | `SM_min_cal`, `SM_max_cal`, umbral de margen bajo |
 | `condiciones_vuelo` | velocidad, altitud (ISA) y Mach (`auto` = V/a) |
 | `remolque` | posición del amarre (`en_CG`, absoluta o relativa), $\alpha_{max}$ y límite lineal |
@@ -190,6 +196,7 @@ material, sin mecanizado, moldes ni envío.
 | `SM_inalcanzable_por_geometria` | $SM_\infty < SM_{min}$: ni un lastre infinitamente denso basta. Hay que cambiar aletas o CP, no lastre |
 | `margen_SM_bajo` | $SM_\infty - SM_{min}$ < `umbral_margen_bajo_cal` |
 | `no_unimodal` | $x_{CG}(\ell)$ tiene más de un valle o la ventana está partida (ver `ventanas.csv`) |
+| `SM_inalcanzable_con_masa_max` | con el lastre que permite el tope de masa del sensor, el SM no llega a SM_min |
 | `inestable_respecto_remolque` | $x_{CP} \le x_T$ |
 | `trim_no_lineal` | $\lvert\alpha_{trim}\rvert$ > `alpha_lineal_max_deg`: la fórmula lineal deja de valer |
 | `dif_CP_alta` | $\lvert x_{CP,OR} - x_{CP,interno}\rvert$ > `dif_CP_max_frac_L` · L |

@@ -115,7 +115,8 @@ def _figura(res: pd.DataFrame, comp: pd.DataFrame, relleno: str, exigir, alto_ma
         for j, D in enumerate(Ds):
             f = c[(c["L_mm"] == L) & (c["D_mm"] == D)].iloc[0]
             if np.isfinite(f["m_relleno_max_g"]):
-                txt = (f"{f['m_relleno_max_g'] / 1000:.2f} kg\nSM {f['SM_cal']:.2f}\n"
+                tope = " (tope)" if f["limitante_masa"] == "masa_max_sensor" else ""
+                txt = (f"{f['m_relleno_max_g'] / 1000:.2f} kg{tope}\nSM {f['SM_cal']:.2f}\n"
                        f"D_ac {f['D_acostado_mm']:.0f} mm\n{f['n_factibles']}/{f['n_variantes']} fact.\n"
                        f"L_tot {f['L_total_mm']:.0f} mm{_largo(f['cabe_largo'])}\n"
                        f"{f['kg_por_L_caja']:.2f} kg/L caja")

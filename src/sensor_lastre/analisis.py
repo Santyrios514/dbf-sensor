@@ -167,6 +167,23 @@ def analizar_caso(caso: Caso, rellenos: list[Relleno] | None = None,
     return res
 
 
+def _ubicar_masa(mod: ModeloLastre, m_obj: float, ell_geo: float, trasero: bool,
+                 tol: float) -> tuple[float, float]:
+    """(ℓ, ℓ₂) para m_obj de lastre: tapón delantero desde x_b0 y, si con ℓ_geo no alcanza y
+    hay tapón trasero, el resto detrás de la electrónica. ℓ = NaN si no cabe."""
+    ell, ell2 = mod.ell_de_masa(m_obj, tol), 0.0
+    m_del_max = float(mod.m_b(ell_geo)) if ell_geo > 0 else 0.0
+    if trasero and ell_geo > 0 and m_obj > m_del_max:
+        resto = m_obj - m_del_max
+        l2max = mod.ell2_max(ell_geo)
+        if mod.rho_b * float(mod.V_tras(ell_geo, l2max)) >= resto:
+            ell = ell_geo
+            ell2 = brentq(lambda l2: mod.rho_b * float(mod.V_tras(ell_geo, l2)) - resto, 0.0, l2max, xtol=tol)
+        else:
+            ell = math.nan
+    return ell, ell2
+
+
 def _analizar_relleno(res: ResultadoCaso, rel: Relleno) -> ResultadoRelleno:
     caso, cav, mv = res.caso, res.cav, res.mv
     g, nu, vu, es = caso.geom, caso.numerico, caso.vuelo, caso.estabilidad
@@ -243,17 +260,30 @@ def _analizar_relleno(res: ResultadoCaso, rel: Relleno) -> ResultadoRelleno:
             lleno = ell_u >= ell_geo - nu.tol
             if caso.lastre.trasero and lleno:
                 ell2 = mod.ell2_por_SM(ell_u, x_CP, D_ref, es.SM_min, nu.tol)
-            V1 = float(mod.V_b(ell_u))
-            V2 = float(mod.V_tras(ell_u, ell2))
-            Vu = V1 + V2
-            m_u = float(mod.m_con_trasero(ell_u, ell2))
-            xcg_u = float(mod.x_CG_con_trasero(ell_u, ell2))
             if not lleno:
                 limitante = "SM"
             elif caso.lastre.trasero:
                 limitante = "SM" if ell2 < mod.ell2_max(ell_u) - nu.tol else "geometria"
             else:
                 limitante = "geometria"
+            m_max = caso.lastre.m_sensor_max
+            if m_max is not None and float(mod.m_con_trasero(ell_u, ell2)) > m_max:
+                # Tope de masa del sensor: el lastre admisible se ubica igual que un presupuesto
+                # (delantero primero, luego trasero). Con menos plomo el SM puede no llegar a SM_min.
+                ell, ell2 = _ubicar_masa(mod, m_max - float(mod.m(0.0)), ell_geo, caso.lastre.trasero,
+                                         nu.tol)
+                limitante = "masa_max_sensor"
+                if not (math.isfinite(ell) and
+                        SM(float(mod.x_CG_con_trasero(ell, ell2))) >= es.SM_min - 1e-6):
+                    banderas.append("SM_inalcanzable_con_masa_max")
+                    ell = math.nan
+                ell_u = ell
+        if math.isfinite(ell_u):
+            V1 = float(mod.V_b(ell_u))
+            V2 = float(mod.V_tras(ell_u, ell2))
+            Vu = V1 + V2
+            m_u = float(mod.m_con_trasero(ell_u, ell2))
+            xcg_u = float(mod.x_CG_con_trasero(ell_u, ell2))
             alpha_u = float(np.degrees(alpha_trim(m_u, xcg_u, x_T_de(xcg_u), x_CP, vu.q, S_ref, CNa)))
             if not (abs(alpha_u) <= np.degrees(caso.remolque.alpha_lineal)):  # también NaN
                 banderas.append("trim_no_lineal")
@@ -282,19 +312,8 @@ def _analizar_relleno(res: ResultadoCaso, rel: Relleno) -> ResultadoRelleno:
             banderas.append("inestable_respecto_remolque")
 
     presupuestos = []
-    m_del_max = float(mod.m_b(ell_geo)) if ell_geo > 0 else 0.0
     for m_obj in caso.presupuesto:
-        ell, ell2 = mod.ell_de_masa(m_obj, nu.tol), 0.0
-        if caso.lastre.trasero and ell_geo > 0 and m_obj > m_del_max:
-            # el delantero se llena hasta ℓ_geo y el resto va detrás de la electrónica
-            resto = m_obj - m_del_max
-            l2max = mod.ell2_max(ell_geo)
-            if rel.rho_b * float(mod.V_tras(ell_geo, l2max)) >= resto:
-                ell = ell_geo
-                ell2 = brentq(lambda l2: rel.rho_b * float(mod.V_tras(ell_geo, l2)) - resto, 0.0, l2max,
-                              xtol=nu.tol)
-            else:
-                ell = math.nan
+        ell, ell2 = _ubicar_masa(mod, m_obj, ell_geo, caso.lastre.trasero, nu.tol)
         no_cabe = (not math.isfinite(ell)) or ell > ell_geo + nu.tol
         p = {"config_id": caso.id, "relleno": rel.nombre, "m_lastre_obj_g": m_obj / G,
              "ell_mm": ell / MM, "ell_trasero_mm": ell2 / MM, "no_cabe": bool(no_cabe)}

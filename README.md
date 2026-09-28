@@ -1,23 +1,72 @@
 # sensor-lastre · Barracuda DBF 2026-27 (UPB)
 
-Volumen utilizable y lastre del sensor remolcado. Para cada configuración (geometría del
-`.ork` más un barrido de parámetros) y cada material de relleno calcula:
+Herramienta de dimensionamiento del **lastre del sensor remolcado**. A partir de la geometría del
+sensor (un `.ork` de OpenRocket más un barrido de parámetros definido en YAML) calcula cuánto
+lastre de plomo cabe, dónde va y cómo queda la estabilidad. Para cada configuración entrega:
 
-- el volumen útil para lastre;
-- la masa, el CG y el margen estático;
+- el volumen interior útil para lastre, descontadas las paredes;
+- la **masa máxima de lastre con margen estático SM ≥ SM_min** y cómo se reparte entre un tapón
+  delantero y uno trasero;
+- el CG, el CP, el SM y el techo de estabilidad por geometría $SM_\infty$;
 - la ventana de longitudes de lastre que cumple el SM;
-- el techo de estabilidad por geometría, $SM_\infty$;
-- el trim respecto al punto de remolque.
+- el trim respecto al punto de remolque y la tolerancia de posición del amarre;
+- las dimensiones exteriores con aletas: largo total, D acostado y D parado;
+- el costo aproximado del relleno, un ranking de configuraciones y un dibujo acotado de cada una.
 
-Especificaciones: `SPEC_lastre_sensor.md` (v1) y `SPEC_lastre_sensor_v2_cambios.md` (v2; gana
-ante conflictos). Geometría de referencia: `modelos/analisis_vol_int.ork` (OpenRocket 24.12).
+Sirve para elegir la geometría exterior (largo, diámetro, aletas) y para fijar las dimensiones
+de la bahía donde se guarda el sensor.
 
-| Fase | Contenido | Estado |
-|---|---|---|
-| A2 | lector del `.ork` sin JVM, perfiles de transición, aleta freeform, tests 1–4, 6 y 8 | ✅ |
-| B2 | script 2 con aletas freeform, popa abierta, $SM_\infty$, figuras nuevas, test 7 | ✅ |
-| C2 | `or_bridge.py` y script 1 sobre el `.ork` real, exportación por componente, `--regresion` (test 5) | ✅ |
-| D2 | barrido `h_tip` × `extension`, comparación OpenRocket frente al modelo interno | ✅ |
+## Cómo funciona
+
+```
+config/*.yaml ──► 01_orlab_export.py ──► data/or_*.csv ──► 02_volumen_lastre.py ──► data/*.csv, figs/
+   (barrido)       (OpenRocket: CP,        (perfil, aletas,     (volumen, lastre, CG,        │
+                    C_Nα, masas, perfil)    CP por componente)   SM, trim, ranking)          ▼
+                                                                          03_comparar_LD.py (resumen L × D)
+```
+
+1. **Geometría.** El YAML define nariz, cuerpo, cola (transición) y aletas freeform de cola.
+   `barrido.parametros` genera las configuraciones (producto cartesiano o `zip`) y
+   `configuraciones` agrega casos explícitos.
+2. **Aerodinámica (script 1).** Cada configuración se aplica sobre el `.ork` base mediante
+   OpenRocket 24.12 (orlab + JPype). Se exportan el perfil exterior, el polígono de aleta que
+   OpenRocket aceptó, el CP y el $C_{N\alpha}$ total y por componente, y las masas en vacío. Antes
+   de modificar nada, se verifica que la configuración `base_ork` coincide con el `.ork`.
+3. **Volumen útil.** El perfil exterior se erosiona capa por capa (fibra + PLA, espesores del
+   YAML) para obtener el radio interior $r_i(x)$. Las integrales acumuladas de área y momento se
+   calculan por Simpson:
+   $$\forall(\ell)=\int_{x_{b0}}^{x_{b0}+\ell}\pi r_i^2\,dx,\qquad \Phi_1(\ell)=\int_{x_{b0}}^{x_{b0}+\ell}\pi r_i^2\,x\,dx$$
+4. **Masa y CG.** Casco, aletas, mamparos, electrónica y masas puntuales dan la masa en vacío
+   $m_0$ y su momento $M_0$. Con un relleno de densidad $\rho_b$ y la electrónica detrás del lastre:
+   $$x_{CG}(\ell)=\frac{M_0+\rho_b\,\Phi_1(\ell)+m_e\,\bar x_e(\ell)}{m_0+\rho_b\,\forall(\ell)+m_e},\qquad SM=\frac{x_{CP}-x_{CG}}{D}$$
+5. **Optimización.** Se busca la máxima masa de lastre con $SM \ge SM_{min}$ (ver abajo).
+6. **Trim y amarre.** Con el remolque en $x_T$:
+   $$\alpha_{trim}\approx\frac{m g\,(x_{CG}-x_T)}{q\,S_{ref}\,C_{N\alpha}\,(x_{CP}-x_T)}$$
+   Por defecto el amarre va en el CG ($\alpha_{trim}=0$). Se reporta el error de posición
+   admisible para un trim máximo $\alpha_{max}$:
+   $$\text{tol}_{amarre}=\frac{\alpha_{max}\,q\,S_{ref}\,C_{N\alpha}\,(x_{CP}-x_{CG})}{m g}$$
+
+Sin OpenRocket (`--sin-orlab`), el perfil se genera analíticamente con las mismas funciones de
+forma de OpenRocket (incluido el recorte de elipsoide, potencia y Haack). El CP sale de un
+Barrowman interno: forma general para nariz y cola, y aletas freeform integradas por franjas
+como `FinSetCalc`.
+
+## Criterio de optimización: máxima masa con SM ≥ SM_min
+
+Para cada configuración:
+
+1. **Tapón delantero.** Crece desde la nariz ($x_{b0}$, primer punto con $r_i \ge$
+   `r_min_util_mm`) hasta donde lo permitan el SM o la geometría (fin de la cavidad, cola,
+   electrónica, zonas prohibidas, `fraccion_max_L`). Suma masa y adelanta el CG.
+2. **Tapón trasero** (`lastre.lastre_trasero: true`). Solo se agrega si el delantero llegó a su
+   límite geométrico. Ocupa el espacio detrás de la electrónica, hacia popa, hasta que
+   $SM = SM_{min}$ o se acaba la cavidad. Suma masa pero atrasa el CG. Como $SM(\ell_2)$ es
+   monótona, el límite se resuelve con `brentq`.
+
+`optimo.csv` filtra las configuraciones que cumplen las banderas de `optimizacion.exigir` y las
+ordena por masa de lastre. Los empates al gramo (cavidad llena) se resuelven por mayor SM, luego
+menor D acostado y luego menor D parado. `limitante_masa` indica si la masa la limitó el SM o la
+geometría.
 
 ## Instalación
 
@@ -27,219 +76,172 @@ pip install -e ".[openrocket]"     # script 1: orlab + JPype
 python -m orlab fetch 24.12        # jar verificado por sha256 (o ORLAB_JAR=/ruta/OpenRocket-24.12.jar)
 ```
 
-El script 1 requiere JDK 17 o 21. Los tests que usan OpenRocket (`tests/test_openrocket.py`) se
-saltan solos si no hay `java` o jar.
+El script 1 requiere JDK 17 o 21. Los resultados son deterministas: con el mismo YAML y
+OpenRocket 24.12 se obtienen los mismos números.
 
 ## Uso
 
 ```bash
-python scripts/01_orlab_export.py --regresion    # compara con OpenRocket (v2 §1.4, M = 0.3)
-python scripts/01_orlab_export.py                # barrido → data/or_*.csv
-python scripts/02_volumen_lastre.py              # usa data/or_*.csv
-python scripts/02_volumen_lastre.py --sin-orlab  # perfiles analíticos + Barrowman interno
+python scripts/01_orlab_export.py                # OpenRocket → data/or_*.csv
+python scripts/02_volumen_lastre.py              # lastre, SM, trim, ranking y figuras
+python scripts/02_volumen_lastre.py --sin-orlab  # sin OpenRocket: perfil analítico + Barrowman interno
+python scripts/01_orlab_export.py --regresion    # verifica la base contra los valores de referencia
 pytest
 ```
 
-Opciones comunes: `--solo id1,id2`, `--rellenos plomo_macizo`, `--sin-figuras`,
-`--dir-datos`, `--guardar-ork` (script 1).
+Opciones comunes: `--config` (otro YAML), `--solo id1,id2`, `--rellenos plomo_macizo`,
+`--sin-figuras`, `--dir-datos`, `--dir-figuras` y `--guardar-ork` (script 1, guarda cada variante
+como `.ork`).
 
-### Configuración (`config/config.yaml`)
+**Comparación de largo y diámetro.** `config/config_barrido_LD.yaml` barre el largo del cuerpo y
+el diámetro con nariz y cola de longitud fija. Así cambia solo el tubo, y los radios coinciden en
+las uniones.
 
-- `barrido.parametros` acepta **cualquier ruta** del YAML: primero se busca en las secciones y
-  luego dentro de `geometria_base`, p. ej. `aletas.h_tip.valor` o `electronica.masa_g`. El modo
-  puede ser `cartesiano` o `zip`, y el id queda como `L350_D65_h_tip30_extension20`.
-- `configuraciones.base_ork` reproduce el `.ork`. El script 1 verifica contra ella que la
-  geometría leída por OpenRocket coincide con la configuración antes de modificar nada.
-- `longitud_referencia: cuerpo` interpreta `L_mm` como longitud del cuerpo (350 mm). La longitud
-  total con aletas se reporta aparte (`L_total_mm` = 390 mm en la base).
-- Los datos que el equipo debe confirmar están marcados `# PENDIENTE` (ver más abajo).
+```bash
+python scripts/01_orlab_export.py  --config config/config_barrido_LD.yaml
+python scripts/02_volumen_lastre.py --config config/config_barrido_LD.yaml
+python scripts/03_comparar_LD.py    --config config/config_barrido_LD.yaml
+```
 
-## Salidas (`data/`)
+El script 3 resume cada par (L, D): la mejor configuración de aletas, cuántas variantes son
+factibles, la caja mínima acostada ($L_{tot}\,D_{ac}^2$) y los kg de lastre por litro de caja.
+Sirve para elegir el par con el que se corre el barrido fino.
+
+## Configuración (`config/config.yaml`)
+
+Es la única fuente de parámetros. Unidades: mm, g, kg/m³ y grados.
+
+| Sección | Qué define |
+|---|---|
+| `materiales`, `costos_usd_kg` | densidades y precio aproximado por kg |
+| `rellenos` | material de lastre (plomo macizo); admite rellenos granulares con matriz |
+| `geometria_base` | nariz, cuerpo, cola y aletas. Las longitudes pueden ser absolutas o relativas a D, L o L_t |
+| `pared` | capas de afuera hacia adentro, por componente o por defecto |
+| `mamparos`, `electronica`, `masas_puntuales` | masas internas y su posición |
+| `lastre` | inicio, radio mínimo útil, factor de llenado, zonas prohibidas, tapón trasero |
+| `estabilidad` | `SM_min_cal`, `SM_max_cal`, umbral de margen bajo |
+| `condiciones_vuelo` | velocidad, altitud (ISA) y Mach (`auto` = V/a) |
+| `remolque` | posición del amarre (`en_CG`, absoluta o relativa), $\alpha_{max}$ y límite lineal |
+| `envolvente` | largo y alto de la bahía (`null` = sin límite) y rotación de guardado |
+| `barrido`, `configuraciones` | parámetros a barrer (cualquier ruta del YAML) y casos explícitos |
+| `openrocket` | `.ork` base, jar y nombres de componentes |
+| `verificacion`, `numerico`, `salida` | tolerancias, discretización y carpetas de salida |
+
+- `barrido.parametros` acepta cualquier ruta del YAML. Primero se busca en las secciones y luego
+  dentro de `geometria_base`, por ejemplo `aletas.h_tip.valor` o `electronica.masa_g`. El id de
+  cada caso se arma con los valores, por ejemplo `L350_D65_h_tip30_extension20_rotacion_deg0`.
+- `longitud_referencia: cuerpo` interpreta `L_mm` como la longitud del cuerpo (nariz + tubo +
+  cola). El largo con aletas se reporta aparte en `L_total_mm`.
+- `configuraciones.base_ork` reproduce el `.ork` y sirve de referencia de regresión.
+- Los valores marcados `# PENDIENTE` son supuestos que el equipo debe confirmar (electrónica,
+  herraje de remolque, material de aletas, popa, presupuesto de masa).
+
+## Salidas
+
+**Datos (`data/`):**
 
 | Archivo | Contenido |
 |---|---|
-| `or_resumen.csv` | script 1: geometría aplicada, r_LE, r_tip, CP, C_Nα (y por diferencias), CD, masa y CG en vacío, envolvente, advertencias, versiones, sha256 |
-| `or_componentes.csv` | C_Nα, CP, masa y CG por componente (nariz, cuerpo, cola, aletas, total) |
-| `or_aletas.csv` | polígono global de la aleta tal como lo aceptó OpenRocket (`origen` = punto \| superficie) |
-| `or_perfiles.csv` | r_e(x) muestreado de OpenRocket |
-| `resultados.csv` | una fila por configuración × relleno. `_geo` = límite geométrico; sin sufijo = ℓ_SM,max |
-| `optimo.csv` | **ranking por el criterio del equipo: máxima masa de lastre con SM ≥ SM_min**, por relleno, solo entre las configuraciones que caben en la bahía (`optimizacion.exigir`). `limitante_masa` dice si la masa la limita el SM o la geometría |
-| `presupuestos.csv` | para cada masa objetivo de lastre: ℓ delantero, ℓ trasero, `no_cabe`, CG, SM, trim y costo |
-| `configuraciones.csv` | una fila por configuración: L total, D, **D acostado** y **D parado**, sección en vuelo (h_env, w_env), geometría de aleta, x_CP y ruta del dibujo |
-| `masas_capas.csv`, `curvas/`, `ventanas.csv` | detalle por capa, curvas ℓ → CG/SM/trim y todos los intervalos que cumplen el SM |
+| `or_resumen.csv` | script 1: geometría aplicada, CP, $C_{N\alpha}$, CD, masa y CG en vacío, advertencias, versiones y sha256 |
+| `or_componentes.csv` | $C_{N\alpha}$, CP, masa y CG por componente |
+| `or_aletas.csv` | polígono de aleta tal como lo aceptó OpenRocket |
+| `or_perfiles.csv` | radio exterior $r_e(x)$ muestreado |
+| `resultados.csv` | una fila por configuración × relleno. Sufijo `_geo` = límite geométrico; sin sufijo = óptimo con SM ≥ SM_min |
+| `optimo.csv` | ranking por masa de lastre entre las configuraciones factibles |
+| `configuraciones.csv` | dimensiones por configuración: L total, D acostado, D parado, sección en vuelo, aleta, x_CP y ruta del dibujo |
+| `presupuestos.csv` | para cada masa objetivo: longitudes de tapón, `no_cabe`, CG, SM, trim y costo |
+| `ventanas.csv` | todos los intervalos de ℓ que cumplen el SM |
+| `masas_capas.csv`, `curvas/` | masa por capa y curvas ℓ → CG, SM y trim |
+| `comparacion_LD*.csv` | script 3: resumen por par (L, D) y tabla L × D de masa máxima |
 
-Figuras (`figs/`):
-- `masa_max__*`, `sm_inf__*`, `sm_max__*` y `masa_SM_min__*`: curvas de diseño frente a
-  `h_tip`, una serie por `extension` y una figura por valor de los demás parámetros (p. ej.
-  `lastre_trasero`); el marcador hueco indica que no cabe en la bahía.
-- `perfil__*`: perfil, capas, polígono de aleta, lastre útil (delantero y trasero), electrónica y x_CP.
-- `dibujo__*`: **dibujo acotado de cada configuración**. Vista lateral: cuerpo, aletas proyectadas
-  según la rotación, lastre y electrónica del óptimo, CG y CP. Vista frontal: D máx. con aletas y
-  rectángulo de bahía. El relleno dibujado se elige en `salida.relleno_dibujo`.
+**Figuras (`figs/`):**
 
-**Dimensiones guardado.** El sensor se guarda siempre **acostado con las aletas en diagonal**
-(`envolvente.rotacion_guardado_deg` = 45°), sin importar la rotación con que vuela. Por eso cada
-configuración reporta:
+- `dibujo__*`: dibujo acotado de cada configuración. La vista lateral muestra el cuerpo, las
+  aletas, el lastre y la electrónica del óptimo, el CG y el CP. La vista frontal muestra la
+  posición de guardado con D acostado y D parado. El relleno dibujado se elige en
+  `salida.relleno_dibujo`.
+- `perfil__*`: perfil, capas de pared, polígono de aleta, lastre útil, electrónica y x_CP.
+- `cg_sm__*`: $x_{CG}(\ell)$ y $SM(\ell)$.
+- `masa_max__*`, `masa_SM_min__*`, `sm_max__*`, `sm_inf__*`: curvas de diseño frente a los
+  parámetros del barrido.
+- `comparacion_LD__*` (script 3): mapa L × D de masa máxima y dispersión de masa frente a D acostado.
 
-- `D_acostado_mm`: lado del cuadrado que ocupa guardado, $\max(D, \sqrt2\,r_{tip})$ para 4 aletas.
-  **Contra este valor se chequea la bahía** (`cabe_alto`, `cabe_ancho`).
-- `D_parado_mm`: círculo que tocan las puntas, $2\max(R, r_{tip})$; es lo que ocupa de pie.
-- `h_env_mm`, `w_env_mm`: sección con la rotación de **vuelo**, solo como referencia.
+**Dimensiones de guardado.** El sensor se guarda acostado con las aletas en diagonal
+(`envolvente.rotacion_guardado_deg` = 45°), sin importar la rotación con la que vuela:
 
-Barrowman da el mismo CP para 4 aletas en + y en X, así que la rotación de vuelo no cambia el SM
-ni la masa. En el barrido, las filas a 0° y a 45° salen iguales salvo h_env y w_env.
+- `D_acostado_mm`: lado del cuadrado que ocupa guardado, $\max(D,\sqrt2\,r_{tip})$ para 4
+  aletas. Es el valor que se compara con la bahía (`cabe_alto`, `cabe_ancho`).
+- `D_parado_mm`: círculo que tocan las puntas, $2\max(R, r_{tip})$.
+- `h_env_mm`, `w_env_mm`: sección con la rotación de vuelo,
+  $h_{env}=\max(R,\,r_{tip}\max\cos\varphi)+\max(R,\,-r_{tip}\min\cos\varphi)$.
 
-**Costo del relleno** (`costo_usd_kg`, `costo_relleno_usd` en `resultados.csv` y `optimo.csv`):
-m_relleno × precio por kg de `costos_usd_kg`. Para el perdigón con epoxy se usa el promedio
-ponderado por fracción de masa. Son **precios aproximados de material** (2026, compra minorista de
-pocos kg). No incluyen mecanizado, moldes ni envío, así que ajústalos con cotizaciones reales.
-- `cg_sm__*`: x_CG(ℓ) y SM(ℓ).
+Con 4 aletas, Barrowman da el mismo CP en + y en X, así que la rotación de vuelo no cambia ni el
+SM ni la masa.
+
+**Costo.** `costo_relleno_usd` = masa de relleno × `costos_usd_kg`. Es un precio aproximado de
+material, sin mecanizado, moldes ni envío.
 
 ### Banderas
 
 | Bandera | Significado |
 |---|---|
-| `inviable_geo` | ℓ_geo ≤ 0 |
-| `SM_inalcanzable` | ningún ℓ ∈ [0, ℓ_geo] cumple el SM con este relleno |
-| `SM_inalcanzable_por_geometria` | $SM_\infty < SM_{min}$: ni un lastre infinitamente denso basta. La solución son las aletas o el CP, no el lastre. No se reporta ℓ_SM |
+| `inviable_geo` | no hay longitud útil para lastre ($\ell_{geo} \le 0$) |
+| `SM_inalcanzable` | ninguna longitud de lastre cumple el SM con este relleno |
+| `SM_inalcanzable_por_geometria` | $SM_\infty < SM_{min}$: ni un lastre infinitamente denso basta. Hay que cambiar aletas o CP, no lastre |
 | `margen_SM_bajo` | $SM_\infty - SM_{min}$ < `umbral_margen_bajo_cal` |
-| `no_unimodal` | x_CG(ℓ) tiene más de un valle o la ventana está partida (ver `ventanas.csv`) |
-| `inestable_respecto_remolque` | x_CP ≤ x_T |
-| `trim_no_lineal` | \|α_trim\| > `alpha_lineal_max_deg`: el amarre está tan lejos del CG que la fórmula lineal no vale |
-| `dif_CP_alta` | \|x_CP,OR − x_CP,interno\| > 5 % de L_cuerpo |
-| `dif_masa_alta` | la masa de algún componente difiere de OpenRocket en más de 3 % (aletas: 2 %). Detecta, por ejemplo, una transición marcada *Filled* |
+| `no_unimodal` | $x_{CG}(\ell)$ tiene más de un valle o la ventana está partida (ver `ventanas.csv`) |
+| `inestable_respecto_remolque` | $x_{CP} \le x_T$ |
+| `trim_no_lineal` | $\lvert\alpha_{trim}\rvert$ > `alpha_lineal_max_deg`: la fórmula lineal deja de valer |
+| `dif_CP_alta` | $\lvert x_{CP,OR} - x_{CP,interno}\rvert$ > `dif_CP_max_frac_L` · L |
+| `dif_masa_alta` | la masa de algún componente difiere de OpenRocket más de lo tolerado (detecta, por ejemplo, una transición marcada *Filled*) |
 
-`cabe_largo`, `cabe_alto` y `cabe_ancho` quedan vacíos si falta el dato de la bahía.
+`cabe_largo`, `cabe_alto` y `cabe_ancho` quedan vacíos cuando la dimensión de la bahía es `null`.
 
-## Criterio de optimización: máxima masa con SM ≥ 1
+## Verificación
 
-El criterio del equipo es **maximizar la masa de lastre sin que el SM baje de `SM_min_cal` = 1.0**.
-Para cada configuración y relleno, el óptimo se construye así:
-
-1. **Tapón delantero** desde la nariz hasta ℓ_SM,max: lo que permitan el SM o la geometría
-   (la electrónica va detrás y debe terminar antes de la cola). Este lastre suma masa **y**
-   adelanta el CG.
-2. **Tapón trasero** (`lastre.lastre_trasero: true`), solo si el delantero llegó a ℓ_geo:
-   detrás de la electrónica, desde su final hacia popa, hasta que SM = SM_min o se acabe la
-   cavidad. Suma masa pero atrasa el CG.
-
-El orden importa. Mientras el tapón delantero pueda crecer, pasar volumen de atrás hacia adelante
-sube el SM con la misma masa; por eso en el óptimo el delantero está lleno o no hay trasero. Como
-el tapón trasero queda detrás del CG, SM(ℓ₂) es monótona y el límite se halla con un `brentq`.
-
-## Resultados (OpenRocket 24.12, M = 0.0897, SM_min = 1.0, plomo en la cola permitido)
-
-La bahía **no es un dato**: el ejercicio sirve para fijarla. `optimo.csv` reporta para cada
-diseño el alto y el ancho que exige (`h_env_mm`, `w_env_mm`, sección con aletas incluidas). Solo
-se filtra por el alto conocido (122 mm). Barrido: `h_tip` × `extension` × rotación (+ a 0°, X a 45°).
-
-**Frontera masa / SM / tamaño de bahía (plomo):**
-
-| Diseño (h_tip / ext. / rotación) | Masa de lastre | SM | Bahía (alto × ancho) | Comentario |
-|---|---|---|---|---|
-| 30 / 40 / X | 6 816 g | 1.00 | **85.9 × 85.9 mm** | bahía mínima; sin margen de SM |
-| **40 / 40 / X** | **6 944 g** (cavidad llena) | **1.46** | **100.0 × 100.0 mm** | **recomendado**: masa máxima con margen |
-| 50 / 40 / X | 6 944 g | 1.78 | 114.2 × 114.2 mm | puesto 1 del ranking; la bahía extra solo compra SM |
-| 30 / 40 / + | 6 816 g | 1.00 | 121.5 × 121.5 mm | dominado por la versión X |
-| 20 / 40 / + (base) | 4 116 g | 1.00 | 101.5 × 101.5 mm | aleta chica: el SM limita |
-
-El equipo fijó el **plomo macizo** como único material de lastre: `rellenos` solo lo lista a él
-(W90, bismuto, acero y perdigón + epoxy se descartaron; se pueden volver a agregar con la misma
-sintaxis). Costo aproximado del relleno del diseño recomendado (40/40/X): 6.94 kg × 4 US$/kg ≈
-**US$ 28** de material.
-
-El diámetro máximo con aletas (circunferencia de las puntas) es $2 r_{tip}$ y no depende de la
-rotación: 141.5 mm con h_tip = 40. En X la bahía necesaria es menor, 100 × 100 mm, porque las
-puntas quedan en las esquinas del rectángulo.
-
-1. **La masa máxima físicamente posible es la cavidad llena:** 612 cm³, es decir 6.94 kg de plomo. Se alcanza con h_tip ≥ 40 mm y tapón trasero. Por encima de eso, más aleta
-   solo aumenta el SM.
-2. **Las aletas en X dominan a las de +:** con la misma aleta, a 45° la sección mide
-   $\sqrt2\,r_{tip}$ en vez de $2 r_{tip}$ (−29 %). Con la misma bahía caben aletas más grandes.
-3. **Para fijar el ancho:** una bahía cuadrada de **100 mm** (más la holgura de montaje y el
-   medio espesor de aleta, 0.9 mm) admite el diseño 40/40/X. Da la masa máxima con SM 1.46, un
-   margen de ~0.46 cal frente a la incertidumbre del CP. Bajar a 86 mm cuesta solo 128 g
-   (−1.8 %) pero deja SM = 1.00 justo.
-4. **Diseño base (h_tip = 20):** el SM limita a 4.1 kg con plomo y no admite tapón trasero.
-5. **Longitud:** L_total va de 350 a 390 mm, más que el `largo_max_mm` = 340 de la v1. El largo
-   de la bahía también sale de aquí: 390 mm con extensión 40, 370 mm con extensión 20.
-
-### Advertencias sobre el óptimo
-
-- **SM = 1.00 exacto no deja margen para la incertidumbre del CP.** El CP de OpenRocket es optimista
-  (advertencia *jagged*) y el Barrowman interno difiere 0.5–3 mm. Con el tapón trasero, cada 0.1 cal
-  de margen cuesta ≈ 230 g de plomo. Para reservarlo, basta subir `SM_min_cal`, por ejemplo a 1.15.
-- **Trim y punto de remolque.** Con 7–10 kg, el peso domina la aerodinámica: $m g$ ≈ 72–106 N
-  frente a $q S_{ref} C_{N\alpha}$ ≈ 11 N/rad (6.7 a 9.9 veces menos). Por eso el amarre va
-  **en el CG** por defecto (`remolque.x_T: en_CG`), con trim estático 0°. Lo que importa es
-  cuánto error admite su posición:
-  $$|x_{CG}-x_T| \le \frac{\alpha_{max}\,q\,S_{ref}\,C_{N\alpha}\,(x_{CP}-x_{CG})}{m\,g}$$
-  Ese valor es `tol_amarre_mm`, con `alpha_trim_max_deg` = 5°. A 30 m/s sale **±1.24 mm** con plomo
-  en el diseño 40/40/X y ±1.96 mm en 50/40/X. La tolerancia crece con
-  $V^2$ y con el margen $(x_{CP}-x_{CG})$, y cae como $1/m$. El amarre debe ser **ajustable**
-  (riel o perforaciones a ±5 mm de `x_T_trim_cero_mm` ≈ 152–156 mm) y calibrarse pesando el
-  sensor ya armado. Si se fija x_T lejos del CG, `trim_no_lineal` avisa cuando |α| supera
-  `alpha_lineal_max_deg` (15°), porque fuera de ese rango la fórmula lineal no da ángulos físicos.
-- **Cargas:** un sensor de 7–10 kg multiplica las cargas en el cable, el winch, la compuerta y el
-  casco de PLA durante el despliegue. Hay que verificarlas contra el presupuesto de masa (v2 §10.4).
-
-### OpenRocket frente al modelo interno
-
-- **Masas por componente:** difieren menos de 0.3 % en todo el barrido. Las pequeñas diferencias
-  vienen de que la pared es bicapa y la del `.ork` es equivalente.
-- **Perfil:** los perfiles analíticos coinciden con OpenRocket en menos de 0.05 mm, en las 6
-  formas con y sin recorte.
-- **CP:** difieren como máximo 11.6 mm (h_tip 20, extensión 0); con h_tip ≥ 30 mm, menos de 3 mm.
-  Siempre menos que el 5 % de L. Ver `dx_CP_or_vs_interno_mm`.
+- `01_orlab_export.py --regresion` compara la base con los valores de referencia de
+  `verificacion.regresion_or` (masa, CG, CP y estabilidad a M = 0.3).
+- En cada corrida se contrastan las masas por componente y el CP de OpenRocket con el modelo
+  interno (`dif_masa_or_pct`, `dx_CP_or_vs_interno_mm`).
+- Los tests (`pytest`) cubren casos analíticos (cilindros, conos, integrales), la geometría de
+  las transiciones y las aletas, la validación del YAML, el modelo de CG, SM y trim, los esquemas
+  de salida y la integración con OpenRocket. Estos últimos se saltan si no hay `java` ni jar.
 
 ## Hipótesis y limitaciones
 
-- El CP de Barrowman/OpenRocket vale para flujo subsónico, ángulos pequeños y flujo libre. No
+- El CP de Barrowman/OpenRocket supone flujo subsónico, ángulos pequeños y flujo libre. No
   incluye la estela del avión, la interferencia del cable ni la catenaria.
-- **La advertencia de perfil irregular** (*jagged*) viene del escalón P4–P5. OpenRocket, y el
-  método interno que lo replica, cortan la cuerda solo contra los puntos de la aleta, sin la
-  franja que sigue la cola. Además la porción detrás de la base trabaja en la estela separada
-  de la base. **El CP reportado es optimista.** Para quitar el escalón: P4 → P5 en línea recta
-  hasta la esquina de la base, o cerrar la popa.
+- El escalón entre P4 y P5 de la aleta genera la advertencia *jagged* de OpenRocket, y la parte
+  de la aleta detrás de la base trabaja en estela separada. **El CP reportado es optimista.**
+  Conviene exigir un margen sobre SM_min (por ejemplo `SM_min_cal: 1.15`).
 - El trim es estático y lineal. La dinámica del cuerpo remolcado queda fuera del alcance.
-- La electrónica es una masa uniforme de diámetro completo y se coloca "detrás del lastre".
-  Con ℓ pequeño eso la pone dentro de la nariz, donde no cabe (ver pendientes).
+- La electrónica se modela como una masa uniforme de diámetro completo, colocada detrás del
+  lastre o en una posición fija.
+- El lastre no se funde dentro del casco: el plomo funde a 327 °C y el PLA/PETG se ablanda a
+  ~60–80 °C. Se funde o mecaniza aparte, se inserta y debe quedar retenido estructuralmente
+  frente al despliegue y el tirón del cable.
 
-## Desviaciones respecto a las especificaciones
+## Estructura
 
-1. **v1 §3.10:** k_n de la potencia debe ser 2n/(2n+1), y la razón de diámetros de la cola cónica
-   estaba invertida. La v2 C2 lo corrige con la forma general.
-2. **Transiciones recortadas.** OpenRocket recorta por defecto las transiciones elipsoide,
-   potencia y Haack. La tabla de la v2 §3.1 describe solo el perfil sin recortar, así que se
-   agregó `cola.recortada` (por defecto `true`, como OpenRocket). La parabólica del `.ork` no se ve afectada.
-3. **Aletas en el Barrowman interno.** Las cuerdas se cortan contra la polilínea de puntos, no
-   contra el polígono cerrado por la superficie (así lo hace FinSetCalc). Cerrando por la
-   superficie, el C_Nα salía hasta 12 % bajo y el CP hasta 22 mm corrido.
-4. **Envolvente general.** Se usa $h_{env} = \max(R, r_{tip}\max\cos\varphi) + \max(R, -r_{tip}\min\cos\varphi)$,
-   que coincide con la fórmula de la v2 para n par y además vale para n impar.
-5. **$SM_\infty$** se evalúa en ℓ* de cada relleno, como indica la spec. Ojo: con ρ → ∞, ℓ* → 0
-   y el techo tiende a (x_CP − x_b0)/D, así que $SM_\infty$ depende de la región elegida. El techo
-   físico con un material dado es `SM_max_alcanzable_cal`.
-6. **Solape de aletas en el eje:** con r_in = 0 son ≈ 0.17 g, no < 0.1 g (sigue siendo < 1 % de las aletas).
-7. Las columnas `cabe_diametro` pasan a `cabe_alto` y `cabe_ancho`. `resultados.csv` agrega
-   `L_total_mm`, `h_env_mm` y `w_env_mm`.
-
-## Datos pendientes del equipo (v2 §10)
-
-| Dato | Valor por defecto | Qué cambia |
-|---|---|---|
-| Electrónica (largo, diámetro, masa, posición) | 100 mm, 150 g, detrás del lastre | ℓ_SM,min, ℓ_geo, x_CG. **Conviene exigir que empiece en el tramo cilíndrico** |
-| Punto de remolque y herraje | x_T en el CG (ajustable), 15 g en x = 40 mm | `tol_amarre_mm`, `alpha_trim_*`, `x_T_trim_cero_mm` |
-| SM_min | 1.0 cal (criterio: máxima masa con SM ≥ 1) | óptimo de masa, ventana, banderas. Conviene agregar margen por incertidumbre del CP |
-| Presupuesto de masa | 250–1500 g | `presupuestos.csv` |
-| Material y espesor de aletas | MAT_PARED_EQ, 1.8 mm | m_aletas, CG en vacío |
-| Popa abierta o cerrada | abierta | mamparo de base, masa |
-| Ancho y largo de la bahía | **salida del ejercicio** (`w_env_mm`, `h_env_mm`, `L_total_mm`) | recomendado: 100 × 100 mm de sección y 390 mm de largo (diseño 40/40/X) |
-
-## Notas de fabricación
-
-- **Plomo fundido (327 °C) dentro de PLA o PETG no es viable:** su transición vítrea está en
-  ~60–80 °C. El lastre se funde o mecaniza aparte y luego se inserta. Manipular plomo con
-  guantes y no lijarlo.
-- **El lastre debe quedar retenido estructuralmente** frente al despliegue, la retracción y el
-  tirón del cable.
+```
+config/     config.yaml (base) y config_barrido_LD.yaml (barrido de largo × diámetro)
+modelos/    analisis_vol_int.ork (geometría de referencia, OpenRocket 24.12)
+scripts/    01_orlab_export.py, 02_volumen_lastre.py, 03_comparar_LD.py
+src/sensor_lastre/
+  config.py        carga y validación del YAML, barrido
+  perfiles.py      funciones de forma de nariz y transición (OpenRocket)
+  aletas.py        aleta freeform: construcción, área, envolvente, Barrowman
+  geometria.py     perfil exterior e interior (erosión por capas), integrales acumuladas
+  masas.py         masas por componente y masa en vacío
+  barrowman.py     CP interno
+  estabilidad.py   CG(ℓ), SM, ventana de lastre, tapón trasero, trim
+  analisis.py      análisis completo por configuración y relleno
+  optimizacion.py  ranking por masa de lastre
+  figuras.py       figuras y dibujos
+  or_bridge.py     puente con OpenRocket (único módulo que usa Java)
+  ork_xml.py       lector del .ork sin JVM
+  esquemas.py      columnas de cada CSV
+  materiales.py, atmosfera.py, verificacion.py
+tests/      pytest
+docs/       api_openrocket.md (API de OpenRocket usada por or_bridge)
+```

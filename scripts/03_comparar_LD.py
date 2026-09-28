@@ -3,7 +3,8 @@
 
 Sirve para elegir con qué L y D correr luego el barrido fino de aletas. Para cada relleno y cada
 par (L, D) resume la mejor configuración factible según el mismo criterio de `optimizacion.ranking`
-(máxima masa de lastre con SM ≥ SM_min que cabe en la bahía; desempate por SM, luego D acostado)
+(máxima masa total del sensor con SM ≥ SM_min, respetando el tope de masa y la bahía; desempate por
+SM, luego D acostado)
 y cuántas de las variantes de aletas son factibles.
 
     python scripts/03_comparar_LD.py --config config/config_barrido_LD.yaml \
@@ -81,8 +82,8 @@ def comparar(res: pd.DataFrame, exigir) -> pd.DataFrame:
     # caja mínima con el sensor acostado (aletas a 45°: alto = ancho = D_acostado); no depende de la bahía
     out["V_caja_acostado_L"] = out["L_total_mm"] * out["D_acostado_mm"] ** 2 * 1e-6
     out["kg_por_L_caja"] = out["m_relleno_max_g"] / 1000 / out["V_caja_acostado_L"]
-    out = out.reset_index()
-    out = out.sort_values(["relleno", "m_relleno_max_g", "SM_cal", "D_acostado_mm"],
+    out = out.reset_index().assign(_m=lambda d: d["m_total_g"].round(0))
+    out = out.sort_values(["relleno", "_m", "SM_cal", "D_acostado_mm"],
                           ascending=[True, False, False, True], na_position="last", kind="stable")
     out["puesto_LD"] = out.groupby("relleno").cumcount() + 1
     return out.reindex(columns=COLUMNAS)
@@ -176,7 +177,7 @@ def main(argv=None) -> int:
     pd.set_option("display.width", 200)
     for rel, c in comp.groupby("relleno", sort=False):
         print(f"\n=== {rel}  (exigido: {', '.join(exigir) or 'nada'})")
-        print(c[["puesto_LD", "L_mm", "D_mm", "m_relleno_max_g", "SM_cal", "D_acostado_mm", "D_parado_mm",
+        print(c[["puesto_LD", "L_mm", "D_mm", "m_total_g", "m_relleno_max_g", "SM_cal", "D_acostado_mm", "D_parado_mm",
                  "V_caja_acostado_L", "kg_por_L_caja", "n_factibles", "n_variantes", "costo_relleno_usd",
                  "config_mejor"]]
               .to_string(index=False, float_format=lambda v: f"{v:.2f}"))

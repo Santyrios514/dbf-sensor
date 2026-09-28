@@ -70,7 +70,7 @@ Para cada configuración:
    vacío menos margen), documentado en el YAML.
 
 `optimo.csv` filtra las configuraciones que cumplen las banderas de `optimizacion.exigir` y las
-ordena por masa de lastre. Los empates al gramo (cavidad llena) se resuelven por mayor SM, luego
+ordena por masa total del sensor. Los empates al gramo (tope de masa o cavidad llena) se resuelven por mayor SM, luego
 menor D acostado y luego menor D parado. `limitante_masa` indica si la masa la limitó el SM, la
 geometría o el tope de masa (`masa_max_sensor`).
 
@@ -153,7 +153,7 @@ Es la única fuente de parámetros. Unidades: mm, g, kg/m³ y grados.
 | `or_aletas.csv` | polígono de aleta tal como lo aceptó OpenRocket |
 | `or_perfiles.csv` | radio exterior $r_e(x)$ muestreado |
 | `resultados.csv` | una fila por configuración × relleno. Sufijo `_geo` = límite geométrico; sin sufijo = óptimo con SM ≥ SM_min |
-| `optimo.csv` | ranking por masa de lastre entre las configuraciones factibles |
+| `optimo.csv` | ranking por masa total del sensor entre las configuraciones factibles |
 | `configuraciones.csv` | dimensiones por configuración: L total, D acostado, D parado, sección en vuelo, aleta, x_CP y ruta del dibujo |
 | `presupuestos.csv` | para cada masa objetivo: longitudes de tapón, `no_cabe`, CG, SM, trim y costo |
 | `ventanas.csv` | todos los intervalos de ℓ que cumplen el SM |
@@ -243,7 +243,7 @@ src/sensor_lastre/
   barrowman.py     CP interno
   estabilidad.py   CG(ℓ), SM, ventana de lastre, tapón trasero, trim
   analisis.py      análisis completo por configuración y relleno
-  optimizacion.py  ranking por masa de lastre
+  optimizacion.py  ranking por masa total del sensor
   figuras.py       figuras y dibujos
   or_bridge.py     puente con OpenRocket (único módulo que usa Java)
   ork_xml.py       lector del .ork sin JVM

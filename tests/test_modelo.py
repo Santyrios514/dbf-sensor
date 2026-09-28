@@ -361,6 +361,18 @@ def test_ranking_desempata_por_SM_y_bahia():
     assert list(ranking(df, ["cabe_alto"])["config_id"]) == ["c", "b", "a"]
 
 
+def test_ranking_con_tope_ordena_por_masa_total():
+    """Con el tope, la masa total empata y gana el SM aunque la otra lleve más plomo."""
+    import pandas as pd
+    from sensor_lastre.optimizacion import ranking
+    df = pd.DataFrame({
+        "config_id": ["liviana", "grande"], "relleno": ["pb"] * 2, "m_relleno_g": [5864.0, 5830.0],
+        "m_total_g": [6200.0, 6200.0], "SM_cal": [1.26, 1.80], "D_acostado_mm": [114, 114],
+        "D_parado_mm": [161, 161], "cabe_alto": [True] * 2, "cabe_ancho": [None] * 2,
+    })
+    assert list(ranking(df, [])["config_id"]) == ["grande", "liviana"]
+
+
 # --------------------------------------------------------------------------- costo, D máx. y dibujo
 
 

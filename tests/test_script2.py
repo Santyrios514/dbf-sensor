@@ -53,7 +53,7 @@ def test_cobertura_barrido(salida_sin_orlab):
     cfg = cargar(CONFIG)
     n = len(cfg.casos) * len(cfg.rellenos)
     res = pd.read_csv(salida_sin_orlab / "resultados.csv")
-    assert len(res) == n == 25 * 5
+    assert len(res) == n == 25 * 1  # solo plomo
     assert set(res["x_CP_fuente"]) == {"interno"}
     pres = pd.read_csv(salida_sin_orlab / "presupuestos.csv")
     assert len(pres) == n * 5

@@ -14,7 +14,7 @@ from sensor_lastre.estabilidad import ModeloLastre, alpha_trim
 from sensor_lastre.geometria import malla
 from sensor_lastre.perfiles import radio_exterior, radio_nariz
 
-from conftest import barrido, solo
+from conftest import PERDIGON, barrido, con_rellenos, solo
 
 MM = 1e-3
 
@@ -365,7 +365,7 @@ def test_ranking_desempata_por_SM_y_bahia():
 
 def test_costo_relleno(raw):
     raw["geometria_base"]["aletas"]["h_tip"]["valor"] = 40
-    cfg = cargar(solo(raw, 350, 65))
+    cfg = cargar(con_rellenos(solo(raw, 350, 65), PERDIGON))
     for rel in cfg.rellenos:
         f = analizar_caso(cfg.casos[0], rellenos=[rel]).rellenos[0].fila
         assert f["costo_usd_kg"] == pytest.approx(rel.costo_usd_kg)
@@ -379,7 +379,7 @@ def test_costo_relleno(raw):
 
 def test_costo_sin_precio_es_nan(raw):
     raw["costos_usd_kg"].pop("acero")
-    cfg = cargar(solo(raw, 350, 65))
+    cfg = cargar(con_rellenos(solo(raw, 350, 65), {"nombre": "acero_macizo", "material": "acero"}))
     assert math.isnan({r.nombre: r.costo_usd_kg for r in cfg.rellenos}["acero_macizo"])
 
 

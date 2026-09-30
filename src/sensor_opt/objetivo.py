@@ -4,9 +4,13 @@
 
     f1 = (m_max − m_total)/m_max
     f2 = (D_ap − D_lo)/(D_hi − D_lo),       D_lo = min D, D_hi = 2 max r_tip
-    f3 = (k − k_lo)/(k_hi − k_lo)
+    f3 = (k_ef − k_lo)/(1 − k_lo),          k_ef = sqrt(k² + f_b (1 − k²))  (taper efectivo)
     f4 = |SM − SM_c| / ((SM_max − SM_min)/2)     (modo 'centro')
          (SM_max − SM)/(SM_max − SM_min)          (modo 'max')
+
+El criterio 3 busca menos resistencia, así que no usa k a secas: una cola muy empinada separa el
+flujo y OpenRocket le carga una fracción f_b del arrastre de base (0 con L_t/ΔD ≥ 3, 1 con
+L_t/ΔD ≤ 1). k_ef es la razón de popa de una base con el mismo arrastre; con la cola roma vale 1.
 
 Tolerancia implícita: como cada f_i ∈ [0, 1], los criterios inferiores juntos pueden compensar
 en J a lo sumo Σ_{i>j} w_i. Una diferencia en f_j mayor que
@@ -60,7 +64,7 @@ def tolerancias(cfg: ConfigOpt) -> dict:
         "diámetro aparente, taper y SM.",
         f"Con la misma masa, uno con hasta {fis['D_ap_mm']:.2f} mm más de diámetro aparente puede ganar "
         "si tiene mejor taper y SM.",
-        f"Con la misma masa y diámetro, uno con hasta {fis['k']:.4f} más de k puede ganar si su SM "
+        f"Con la misma masa y diámetro, uno con hasta {fis['k']:.4f} más de k efectivo puede ganar si su SM "
         "está más cerca del objetivo.",
         "El SM es el último criterio: no compensa nada.",
     ]

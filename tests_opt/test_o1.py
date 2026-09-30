@@ -34,7 +34,7 @@ def test_malla_por_defecto(cfg_default):
     assert cfg_default.n_evaluaciones == 420 * 756
     c = cfg_default.cotas
     assert c["D_ap_lo"] == pytest.approx(0.060) and c["D_ap_hi"] == pytest.approx(2.4 * 0.070)
-    assert (c["k_lo"], c["k_hi"]) == (0.15, 0.6)
+    assert (c["k_lo"], c["k_hi"]) == (0.15, 1.0)  # f3 usa k efectivo, que llega a 1 con cola roma
 
 
 def test_T2_aleta_contenida_en_toda_la_malla(cfg_default):
@@ -98,7 +98,7 @@ def test_T3_misma_cavidad_masas_y_cg_que_sensor_lastre(cfg_default):
 
 
 def test_cuerpo_y_aleta_de_referencia(cfg_default):
-    spec = cfg_default.cuerpos()[0]
+    spec = next(c for c in cfg_default.cuerpos() if c.L_t_rel_D == 1.5)
     cu = construir_cuerpo(cfg_default, spec)
     assert cu.ok and cu.caso.geom.L == pytest.approx(0.400)
     assert cu.caso.geom.nariz.Ln == pytest.approx(spec.D) and cu.caso.geom.cola.Ra == pytest.approx(spec.k * spec.D / 2)
@@ -136,3 +136,29 @@ def test_flutter_referencia_spec():
     v1 = velocidad_flutter(0.040, A, 0.060, 0.030, 0.001, 2.4e9, 0.38, 0.0)
     assert 350 < v2 < 450 and 120 < v1 < 170  # spec v3 §3.2.1: ≈ 425 y ≈ 150 m/s
     assert v2 / v1 == pytest.approx(2 ** 1.5, rel=1e-9)  # V_f ∝ t^{3/2}
+
+
+def test_arrastre_de_cola_como_openrocket():
+    """f_b = (3 − L_t/ΔD)/2 entre las finezas 3 y 1 (SymmetricComponentCalc, OpenRocket 24.12)."""
+    from sensor_opt.geometria import fineza_cola, fraccion_base_roma, k_efectivo
+    assert fineza_cola(0.070, 0.15, 0.056) == pytest.approx(0.056 / (0.070 * 0.85))
+    assert [fraccion_base_roma(f) for f in (4.0, 3.0, 2.0, 1.0, 0.5)] == [0.0, 0.0, 0.5, 1.0, 1.0]
+    assert k_efectivo(0.3, 0.0) == pytest.approx(0.3) and k_efectivo(0.3, 1.0) == pytest.approx(1.0)
+    assert k_efectivo(0.3, 0.5) == pytest.approx(math.sqrt(0.09 + 0.5 * 0.91))
+
+
+def test_cola_base_roma_se_descarta(cfg_default):
+    """El ganador de 10 kg anterior (parabólica, L_t = 0.8 D, k = 0.15, θ ≈ 28°) queda fuera."""
+    spec = next(c for c in cfg_default.cuerpos() if c.D_mm == 70 and c.forma == "parabolica"
+                and c.parametro == 1.0 and c.L_t_rel_D == 0.8 and c.k == 0.15)
+    cu = construir_cuerpo(cfg_default, spec)
+    assert "cola_base_roma" in cu.motivos and cu.fineza < 1 and cu.k_ef == pytest.approx(1.0)
+    suave = next(c for c in cfg_default.cuerpos() if c.D_mm == 70 and c.L_t_rel_D == 2.0 and c.k == 0.6)
+    cu = construir_cuerpo(cfg_default, suave)
+    assert cu.ok and cu.f_base_roma == 0.0 and cu.k_ef == pytest.approx(0.6)
+
+
+def test_config_base_roma(raw):
+    raw["restricciones"]["cola_base_roma"] = {"angulo_inicio_deg": 30, "angulo_base_roma_deg": 20}
+    with pytest.raises(ConfigError):
+        cargar(raw)

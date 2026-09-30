@@ -32,6 +32,25 @@ def theta_eq(R: float, k: float, L_t: float) -> float:
     return math.atan2(R * (1.0 - k), L_t)
 
 
+def fineza_cola(D: float, k: float, L_t: float) -> float:
+    """L_t / ΔD con ΔD = D (1 − k): la 'fineness' que usa OpenRocket para el arrastre de la cola."""
+    dD = D * (1.0 - k)
+    return L_t / dD if dD > 0 else math.inf
+
+
+def fraccion_base_roma(fineza: float, sin_arrastre: float = 3.0, base_roma: float = 1.0) -> float:
+    """Fracción f_b del arrastre de base que suma la cola (SymmetricComponentCalc de OpenRocket 24.12,
+    datos de Hoerner): 0 si L_t/ΔD ≥ 3, 1 si ≤ 1 y lineal entre ambos, (3 − L_t/ΔD)/2."""
+    return min(max((sin_arrastre - fineza) / (sin_arrastre - base_roma), 0.0), 1.0)
+
+
+def k_efectivo(k: float, f_b: float) -> float:
+    """Razón de popa equivalente para el arrastre: OpenRocket carga la cola con f_b del arrastre de
+    base sobre el área (A_f − A_a), así que el área de base 'efectiva' es A_a + f_b (A_f − A_a):
+    k_ef = sqrt(k² + f_b (1 − k²)). Sin separación k_ef = k; con la cola roma k_ef = 1 (sin taper)."""
+    return math.sqrt(k * k + f_b * (1.0 - k * k))
+
+
 @dataclass
 class Cuerpo:
     """Caché por cuerpo (v3 §4.2). `motivos` no vacío = cuerpo descartado."""
@@ -46,6 +65,9 @@ class Cuerpo:
     partes_cuerpo: tuple[Contribucion, ...] = ()  # nariz y cola (Barrowman general)
     theta_eq: float = math.nan
     L_c: float = math.nan
+    fineza: float = math.nan  # L_t / ΔD
+    f_base_roma: float = math.nan
+    k_ef: float = math.nan
 
     @property
     def ok(self) -> bool:
@@ -74,6 +96,11 @@ def construir_cuerpo(cfg: ConfigOpt, spec: CuerpoSpec) -> Cuerpo:
         cu.motivos.append("k_bajo_minimo")
     if rest.angulo_cola_max is not None and cu.theta_eq > rest.angulo_cola_max + 1e-12:
         cu.motivos.append("angulo_cola")
+    cu.fineza = fineza_cola(spec.D, spec.k, spec.L_t)
+    cu.f_base_roma = fraccion_base_roma(cu.fineza, rest.fineza_sin_arrastre, rest.fineza_base_roma)
+    cu.k_ef = k_efectivo(spec.k, cu.f_base_roma)
+    if rest.base_roma_infactible and cu.fineza <= rest.fineza_base_roma + 1e-12:
+        cu.motivos.append("cola_base_roma")
     try:
         caso = cargar_lastre(raw_cuerpo(cfg, spec)).casos[0]
     except ConfigError as e:

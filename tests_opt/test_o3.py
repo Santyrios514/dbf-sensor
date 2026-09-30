@@ -43,7 +43,11 @@ def test_factibles_cumplen_restricciones(cfg_chica, ranking):
     assert (fac["SM_cal"] >= r.SM_min - 0.005).all()  # T5: ±0.005 cal (brentq con tol_raiz_mm) and (fac["SM_cal"] <= r.SM_max + 1e-9).all()
     assert (fac["m_total_g"] <= cfg_chica.m_max * 1e3 + 0.1).all()
     assert (fac["k"] >= r.k_min).all() and (fac["h_mm"] >= r.h_min * 1e3 - 1e-9).all()
-    assert fac["restriccion_activa"].isin(["masa", "SM_min", "volumen"]).all()
+    assert fac["restriccion_activa"].isin(["masa", "SM_min", "volumen", "tol_amarre"]).all()
+    tol_min = cfg_chica.base_raw["remolque"].get("tol_amarre_min_mm")
+    if tol_min is not None:
+        assert (fac["tol_amarre_mm"] >= tol_min * (1 - 1e-3)).all()
+    assert (fac["fineza_cola"] > 1.0).all()  # sin colas de base roma
     assert np.allclose(fac["D_ap_mm"], 2 * np.maximum(fac["D_mm"] / 2, fac["r_tip_mm"]))
     assert np.allclose(fac["h_45_mm"], np.maximum(fac["D_mm"], math.sqrt(2) * fac["r_tip_mm"]))
 

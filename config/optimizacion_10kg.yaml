@@ -46,6 +46,10 @@ restricciones:
   c_min_mm: 5.0
   eps_CN: 0.5
   angulo_cola_max_deg: null        # p. ej. 20; null = sin restricción
+  cola_base_roma:                  # arrastre de la cola como en OpenRocket (Hoerner): fracción f_b de la base
+    angulo_inicio_deg: 9.46        # L_t/ΔD = 3: por debajo la cola no suma arrastre de base (f_b = 0)
+    angulo_base_roma_deg: 26.57    # L_t/ΔD = 1: la cola equivale a una base roma (f_b = 1)
+    infactible: true               # descarta las colas con L_t/ΔD ≤ 1; entre ambos ángulos, f3 usa k_ef
 
 objetivo:
   pesos: [1.0e6, 1.0e4, 1.0e2, 1.0]

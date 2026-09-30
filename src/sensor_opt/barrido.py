@@ -49,14 +49,16 @@ def evaluar_cuerpo(cfg: ConfigOpt, c: CuerpoSpec, aletas: list[AletaSpec],
     if cu.caso is None or not cu.ok:
         for a in aletas:
             f = _fila_base(cfg, c, a)
-            f.update({"motivos": ";".join(cu.motivos), "theta_eq_deg": math.degrees(cu.theta_eq)})
+            f.update({"motivos": ";".join(cu.motivos), "theta_eq_deg": math.degrees(cu.theta_eq),
+                      "fineza_cola": cu.fineza, "f_base_roma": cu.f_base_roma, "k_efectivo": cu.k_ef})
             filas.append(f)
         return filas
     rest, pa = cfg.restricciones, cfg.aleta
     vuelo = cu.caso.vuelo
     n_franjas = cu.caso.numerico.n_franjas_aleta
     R = c.D / 2
-    comunes = {"theta_eq_deg": math.degrees(cu.theta_eq), "L_c_mm": cu.L_c / MM, "x_b0_mm": cu.x_b0 / MM,
+    comunes = {"theta_eq_deg": math.degrees(cu.theta_eq), "fineza_cola": cu.fineza,
+               "f_base_roma": cu.f_base_roma, "k_efectivo": cu.k_ef, "L_c_mm": cu.L_c / MM, "x_b0_mm": cu.x_b0 / MM,
                "ell_geo_mm": cu.lim.ell_geo / MM, "m_casco_g": cu.mv.m_casco / G}
     for a in aletas:
         f = _fila_base(cfg, c, a)
@@ -140,7 +142,7 @@ def completar(cfg: ConfigOpt, df: pd.DataFrame) -> pd.DataFrame:
     ok = df["factible"].astype(bool)
     m_total = df["m_total_g"].astype(float) * G
     SM = df["SM_cal"].astype(float)
-    F = f_valores(cfg, m_total, df["D_ap_mm"].astype(float) * MM, df["k"].astype(float), SM)
+    F = f_valores(cfg, m_total, df["D_ap_mm"].astype(float) * MM, df["k_efectivo"].astype(float), SM)
     valido = np.isfinite(m_total) & np.isfinite(SM)
     for j, col in enumerate(("f1", "f2", "f3", "f4")):
         df[col] = np.where(valido, F[:, j], np.nan)

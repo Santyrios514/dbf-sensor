@@ -158,6 +158,7 @@ class Remolque:
     x_T: float | None
     alpha_max: float = math.radians(5.0)  # trim admisible (para la tolerancia del amarre)
     alpha_lineal: float = math.radians(15.0)  # validez de la fórmula lineal de trim
+    tol_min: float | None = None  # tolerancia de amarre mínima exigida [m]; None = sin mínimo
 
 
 @dataclass(frozen=True)
@@ -535,11 +536,15 @@ def _resolver_caso(cid: str, L_mm: float, D_mm: float, sec: dict, rellenos, erro
     a_lin = math.radians(float(rq.get("alpha_lineal_max_deg", 15.0)))
     if not 0 < a_max <= a_lin:
         errores.append("remolque: se requiere 0 < alpha_trim_max_deg ≤ alpha_lineal_max_deg")
+    tmin = rq.get("tol_amarre_min_mm")
+    tol_min = None if tmin is None else float(tmin) * MM
+    if tol_min is not None and not tol_min > 0:
+        errores.append("remolque.tol_amarre_min_mm debe ser > 0 o null")
     if xT == "en_CG" or isinstance(xT, dict) and xT.get("modo") == "en_CG":
-        remolque = Remolque(modo="en_CG", x_T=None, alpha_max=a_max, alpha_lineal=a_lin)
+        remolque = Remolque(modo="en_CG", x_T=None, alpha_max=a_max, alpha_lineal=a_lin, tol_min=tol_min)
     else:
         remolque = Remolque(modo="absoluto", x_T=_longitud(xT, {"D": D, "L": L}, "remolque.x_T", errores),
-                            alpha_max=a_max, alpha_lineal=a_lin)
+                            alpha_max=a_max, alpha_lineal=a_lin, tol_min=tol_min)
 
     env = sec["envolvente"]
 

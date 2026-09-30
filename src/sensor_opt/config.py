@@ -125,6 +125,15 @@ class ConfigOpt:
     numerico: dict[str, Any]
     salida: dict[str, Any]
     raiz: Path = field(default_factory=Path.cwd)
+    base_ruta: Path | None = None  # ruta de base_config; sus rutas relativas (p. ej. el .ork) cuelgan de su raíz
+
+    def ruta_base(self, v: str) -> Path:
+        """Ruta relativa de base_config (p. ej. openrocket.ork_base) resuelta desde su proyecto."""
+        p = Path(v)
+        if p.is_absolute():
+            return p
+        raiz = self.base_ruta.resolve().parents[1] if self.base_ruta is not None else self.raiz
+        return raiz / p
 
     # ------------------------------------------------------------------ malla
     def cuerpos(self, malla: dict | None = None) -> list[CuerpoSpec]:
@@ -280,7 +289,7 @@ def cargar(ruta: str | Path | dict, raiz: Path | None = None) -> ConfigOpt:
         aleta=aleta, malla=m, restricciones=rest,
         objetivo=Objetivo(pesos=pesos, f4_modo=modo, SM_centro=float(ob.get("SM_centro_cal", 1.5))),
         ejecucion=raw.get("ejecucion") or {}, numerico=raw.get("numerico") or {},
-        salida=raw.get("salida") or {}, raiz=raiz)
+        salida=raw.get("salida") or {}, raiz=raiz, base_ruta=base_path)
 
 
 # --------------------------------------------------------------------------- puente con sensor_lastre

@@ -94,3 +94,20 @@ P0 → … → Pk, sin el cierre por la superficie de la cola. El span va del pu
 a la punta (31.24 mm en la base, no los 20 mm de h). Con esa convención, el método interno
 (`aletas.barrowman_freeform`) reproduce el CP de las aletas de OpenRocket en menos de 0.6 mm y su
 C_Nα en menos de 7 % en todo el barrido.
+
+## Extensiones de `sensor_opt` (`PuenteOpt`, spec v3)
+
+Verificado con OpenRocket 24.12 desde `src/sensor_opt/verificacion.py`:
+
+| Uso | Llamada |
+|---|---|
+| Masa concentrada | `MassComponent(length, radius, mass)`; `setName(str)`; `setComponentMass(double)` |
+| Colgarla del cuerpo | `BodyTube.addChild(mc)` |
+| Posición absoluta | `mc.setAxialMethod(AxialMethod.ABSOLUTE)`; `mc.setAxialOffset(x)` (x = borde delantero desde la punta; puede quedar fuera del tramo del padre) |
+| CG propio | `mc.getComponentCG().x` = `length / 2` (local) |
+| Masa total | `MassCalculator.calculateStructure` **incluye** los `MassComponent` (comprobado: 1 kg en x = 30.5 mm da el CG esperado a 1e-15) |
+| Aleta contenida | `FreeformFinSet.setAxialMethod(AxialMethod.BOTTOM)`; `setAxialOffset(−δ_b)`: el offset positivo mueve el borde de salida de la raíz **hacia popa** de la base, así que una aleta que termina δ_b antes de la base lleva offset negativo |
+| Radio de la cola en x local | `Transition.getRadius(x)` para r_LE y r_TE,raíz (P3 cae exactamente sobre la superficie de OpenRocket) |
+
+Los `MassComponent` y el material `ONYX` se guardan en el `.ork` con `orl.save_doc` y al reabrirlo
+reproducen masa, CG y CP (T10).

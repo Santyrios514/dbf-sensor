@@ -43,7 +43,7 @@ def escribir_json(obj: dict, ruta: Path):
 
 
 def leer_ranking(ruta: Path) -> pd.DataFrame:
-    df = pd.read_csv(ruta, keep_default_na=True)
+    df = pd.read_csv(ruta, keep_default_na=True, low_memory=False)
     for c in ("factible", "en_pareto", "verificado_or", "flutter_margen_bajo", "refinamiento"):
         if c in df:
             df[c] = df[c].astype(str).str.lower().isin(["true", "1"])

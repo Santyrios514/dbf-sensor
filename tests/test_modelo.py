@@ -276,6 +276,7 @@ def _caso_opt(raw, trasero, h=30, e=40, SM_min=1.0):
     raw["geometria_base"]["aletas"]["extension"]["valor"] = e
     raw["lastre"]["lastre_trasero"] = trasero
     raw["estabilidad"]["SM_min_cal"] = SM_min
+    raw["lastre"]["masa_max_sensor_g"] = None  # óptimo sin tope de masa
     cfg = cargar(solo(raw, 350, 65))
     return cfg.casos[0], cfg.rellenos[0]
 
@@ -358,6 +359,18 @@ def test_ranking_desempata_por_SM_y_bahia():
         "cabe_alto": [True] * 3, "cabe_ancho": [None] * 3,
     })
     assert list(ranking(df, ["cabe_alto"])["config_id"]) == ["c", "b", "a"]
+
+
+def test_ranking_con_tope_ordena_por_masa_total():
+    """Con el tope, la masa total empata y gana el SM aunque la otra lleve más plomo."""
+    import pandas as pd
+    from sensor_lastre.optimizacion import ranking
+    df = pd.DataFrame({
+        "config_id": ["liviana", "grande"], "relleno": ["pb"] * 2, "m_relleno_g": [5864.0, 5830.0],
+        "m_total_g": [6200.0, 6200.0], "SM_cal": [1.26, 1.80], "D_acostado_mm": [114, 114],
+        "D_parado_mm": [161, 161], "cabe_alto": [True] * 2, "cabe_ancho": [None] * 2,
+    })
+    assert list(ranking(df, [])["config_id"]) == ["grande", "liviana"]
 
 
 # --------------------------------------------------------------------------- costo, D máx. y dibujo
@@ -465,3 +478,42 @@ def test_bahia_se_chequea_guardado_acostado(raw):
     cfg = cargar(solo(raw, 350, 65))
     f = analizar_caso(cfg.casos[0], rellenos=[cfg.rellenos[0]]).rellenos[0].fila
     assert f["cabe_alto"] is False
+
+
+# --------------------------------------------------------------------------- tope de masa del sensor
+
+
+def _fila_plomo(raw):
+    cfg = cargar(solo(raw, 350, 65))
+    return analizar_caso(cfg.casos[0], rellenos=[cfg.rellenos[0]]).rellenos[0].fila
+
+
+def test_masa_max_sensor_limita_el_optimo(raw):
+    raw["geometria_base"]["aletas"]["h_tip"]["valor"] = 40
+    raw["lastre"]["masa_max_sensor_g"] = None
+    libre = _fila_plomo(raw)
+    tope = libre["m_total_g"] - 1000
+    raw["lastre"]["masa_max_sensor_g"] = tope
+    f = _fila_plomo(raw)
+    assert f["m_total_g"] == pytest.approx(tope, abs=0.5)
+    assert f["m_relleno_g"] == pytest.approx(libre["m_relleno_g"] - 1000, abs=0.5)
+    assert f["limitante_masa"] == "masa_max_sensor"
+    assert f["SM_cal"] >= raw["estabilidad"]["SM_min_cal"] - 1e-6
+    assert f["SM_cal"] > libre["SM_cal"]  # sale plomo del tapón trasero: el CG avanza
+
+
+def test_masa_max_sensor_holgada_no_cambia_nada(raw):
+    raw["lastre"]["masa_max_sensor_g"] = None
+    libre = _fila_plomo(raw)
+    raw["lastre"]["masa_max_sensor_g"] = 1e6
+    f = _fila_plomo(raw)
+    assert f["m_relleno_g"] == pytest.approx(libre["m_relleno_g"])
+    assert f["limitante_masa"] == libre["limitante_masa"]
+
+
+def test_masa_max_sensor_sin_SM(raw):
+    raw["geometria_base"]["aletas"]["h_tip"]["valor"] = 20  # aleta chica: el SM depende del plomo
+    raw["lastre"]["masa_max_sensor_g"] = 400  # casi sin plomo: el SM no llega a SM_min
+    f = _fila_plomo(raw)
+    assert "SM_inalcanzable_con_masa_max" in f["banderas"]
+    assert not math.isfinite(f.get("m_relleno_g", math.nan))

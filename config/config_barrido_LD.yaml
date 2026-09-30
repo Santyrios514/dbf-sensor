@@ -102,6 +102,14 @@ lastre:
   zonas_prohibidas: []          # [{desde_mm:..., hasta_mm:...}]
   lastre_trasero: true          # segundo tapón detrás de la electrónica (cola); se llena hasta SM = SM_min
   margen_popa_mm: 0.0           # hueco libre al final de la cavidad para el tapón trasero
+  masa_max_sensor_g: 6200       # tope de masa TOTAL del sensor (null = sin tope). Presupuesto con
+  # MTOW = 16 kg (estimado, ajustar con el peso real del avión):
+  #   estructura (ala, fuselaje, empenaje) 4.5 kg · tren de aterrizaje 0.6 kg
+  #   propulsión (motor, ESC, hélice) 1.2 kg · batería de propulsión 0.8 kg
+  #   aviónica, servos, cableado y batería RX 0.5 kg · sistema de despliegue (winch, cable,
+  #   compuerta, bahía) 1.2 kg → vacío 8.8 kg (55 % del MTOW)
+  #   margen de crecimiento de peso 1.0 kg (≈ 11 % del vacío)
+  #   sensor máx. = 16 − 8.8 − 1.0 = 6.2 kg (casco, aletas, electrónica, herraje y lastre)
 
 optimizacion:                   # criterio: máxima masa de lastre con SM ≥ SM_min
   exigir: [cabe_alto, cabe_ancho]   # banderas de envolvente que deben ser verdaderas (null = sin dato → no filtra)

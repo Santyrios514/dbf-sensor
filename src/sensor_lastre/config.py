@@ -127,6 +127,7 @@ class Lastre:
     zonas_prohibidas: tuple[tuple[float, float], ...]
     trasero: bool = False  # tapón trasero detrás de la electrónica (hasta el final de la cavidad)
     margen_popa: float = 0.0  # distancia libre entre el tapón trasero y el final de la cavidad
+    m_sensor_max: float | None = None  # tope de masa total del sensor [kg]; None = sin tope
 
 
 @dataclass(frozen=True)
@@ -498,7 +499,10 @@ def _resolver_caso(cid: str, L_mm: float, D_mm: float, sec: dict, rellenos, erro
         permitir_en_cola=bool(la.get("permitir_en_cola", False)),
         margen_cola=float(la.get("margen_cola_mm", 0.0)) * MM, zonas_prohibidas=tuple(zonas),
         trasero=bool(la.get("lastre_trasero", False)), margen_popa=float(la.get("margen_popa_mm", 0.0)) * MM,
+        m_sensor_max=None if la.get("masa_max_sensor_g") is None else float(la["masa_max_sensor_g"]) * G,
     )
+    if lastre.m_sensor_max is not None and not lastre.m_sensor_max > 0:
+        errores.append("lastre.masa_max_sensor_g debe ser > 0 o null")
     if lastre.trasero and electronica.modo != "detras_del_lastre":
         errores.append("lastre.lastre_trasero requiere electronica.modo = detras_del_lastre")
 

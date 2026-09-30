@@ -72,7 +72,7 @@ def llenar(cu: Cuerpo, g: GeomAleta, cp: ResultadoCP, SM_max: float, fuente: str
             motivos.append("sin_llenado")
         return Llenado(res, rr, "ninguna", math.nan, math.nan, motivos)
     m_del = (m_rel - f.get("m_relleno_trasero_g", 0.0)) * G
-    ell = rr.modelo.ell_de_masa(m_del, caso.numerico.tol) if m_del > 0 else 0.0
+    ell = rr.ell_delantero  # largo real del tapón delantero (recortado si manda el tope de masa)
     if f["SM_cal"] > SM_max + 1e-9:
         motivos.append("SM_sobre_max")
     return Llenado(res, rr, RESTRICCION.get(f.get("limitante_masa"), "ninguna"), ell, m_del, motivos)

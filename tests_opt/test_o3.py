@@ -9,12 +9,12 @@ import pytest
 from sensor_opt import barrido, exportar
 from sensor_opt.config import cargar
 
-from conftest import malla_chica
+from .conftest import malla_chica
 
 
 @pytest.fixture(scope="module")
 def cfg_chica():
-    from conftest import raw_opt
+    from .conftest import raw_opt
     return cargar(malla_chica(raw_opt()))
 
 
@@ -78,7 +78,7 @@ def test_limite_de_evaluaciones(tmp_path):
     import subprocess
     import sys
     import yaml
-    from conftest import RAIZ, raw_opt
+    from .conftest import RAIZ, raw_opt
     raw = raw_opt()
     raw["base_config"] = str(RAIZ / "config" / "config.yaml")
     raw["ejecucion"]["max_evaluaciones"] = 10

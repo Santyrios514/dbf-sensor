@@ -95,15 +95,6 @@ def detalle(cfg: ConfigOpt, c: CuerpoSpec, a: AletaSpec, cal: Calibracion = IDEN
     return Detalle(cu, Ll, Ll.motivos)
 
 
-def _rr_dibujo(Ll: Llenado):
-    """Las figuras de sensor_lastre dibujan el tapón delantero hasta ventana.ell_SM_max; con el
-    tope de masa el tapón real es más corto (ℓ del llenado), así que se pasa una copia."""
-    rr = Ll.rr
-    if rr.ventana is None or not math.isfinite(Ll.ell):
-        return rr
-    return replace(rr, ventana=replace(rr.ventana, ell_SM_max=Ll.ell))
-
-
 # --------------------------------------------------------------------------- figuras
 
 
@@ -120,7 +111,7 @@ def fig_ganador(cfg: ConfigOpt, fila: pd.Series, dir_fig: Path, cal: Calibracion
     if det.llenado is None:
         return []
     dir_fig.mkdir(parents=True, exist_ok=True)
-    res, rr = det.llenado.res, _rr_dibujo(det.llenado)
+    res, rr = det.llenado.res, det.llenado.rr
     res.caso = replace(res.caso, id=str(fila["cand_id"]))
     rutas = [dir_fig / f"ganador_perfil{sufijo}.png", dir_fig / f"ganador_dibujo{sufijo}.png"]
     fig_perfil(res, rr, rutas[0])

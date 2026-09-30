@@ -12,7 +12,7 @@ import pandas as pd
 import pytest
 import yaml
 
-from conftest import CONFIG_OPT, RAIZ, malla_chica, raw_opt
+from .conftest import CONFIG_OPT, RAIZ, malla_chica, raw_opt
 
 
 def _hay_openrocket() -> bool:

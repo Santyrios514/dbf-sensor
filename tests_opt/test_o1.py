@@ -16,7 +16,7 @@ from sensor_opt.aletas import construir, dimensiones, velocidad_flutter
 from sensor_opt.config import ConfigError, cargar, raw_cuerpo
 from sensor_opt.geometria import construir_cuerpo, theta_eq
 
-from conftest import RAIZ
+from .conftest import RAIZ
 
 MM = 1e-3
 

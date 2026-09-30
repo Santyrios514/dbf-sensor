@@ -94,18 +94,19 @@ def fig_perfil(res: ResultadoCaso, rr: ResultadoRelleno | None, ruta: Path):
         P = np.vstack([a.poligono, a.poligono[:1]]) / MM
         ax.fill(P[:, 0], P[:, 1], color=AMARILLO, alpha=0.35, lw=0, label="aleta")
         ax.plot(P[:, 0], P[:, 1], color=TINTA2, lw=0.8)
-    if rr is not None and rr.ventana is not None and math.isfinite(rr.ventana.ell_SM_max):
-        a0, b0 = res.x_b0, res.x_b0 + rr.ventana.ell_SM_max
+    ell1 = rr.ell_delantero if rr is not None else math.nan
+    if math.isfinite(ell1):
+        a0, b0 = res.x_b0, res.x_b0 + ell1
         m = (cav.x >= a0) & (cav.x <= b0)
         ax.fill_between(x[m], 0, cav.r_i[m] / MM, color=AZUL, alpha=0.55, lw=0,
                         label=f"lastre útil ({rr.relleno.nombre})")
         ell2 = rr.fila.get("ell_trasero_mm", 0.0) * MM
         if ell2 > 0:
-            a2 = rr.modelo.x_r0(rr.ventana.ell_SM_max)
+            a2 = rr.modelo.x_r0(ell1)
             m2 = (cav.x >= a2) & (cav.x <= a2 + ell2)
             ax.fill_between(x[m2], 0, cav.r_i[m2] / MM, color=AZUL, alpha=0.55, lw=0)
         el = caso.electronica
-        x_e = float(rr.modelo.x_e(rr.ventana.ell_SM_max))
+        x_e = float(rr.modelo.x_e(ell1))
         ax.axvspan(x_e / MM, (x_e + el.Le) / MM, ymax=0.3, color=AQUA, alpha=0.35, lw=0,
                    label="electrónica")
     b_geo = res.x_b0 + res.lim.ell_geo
@@ -252,8 +253,9 @@ def fig_dibujo(res: ResultadoCaso, rr: ResultadoRelleno | None, ruta: Path):
     al.plot(x, -cav.r_i / MM, color=TINTA2, lw=0.5)
 
     titulo = f"{caso.id}"
-    if rr is not None and rr.ventana is not None and np.isfinite(rr.ventana.ell_SM_max):
-        mod, ell1 = rr.modelo, rr.ventana.ell_SM_max
+    ell1 = rr.ell_delantero if rr is not None else math.nan
+    if math.isfinite(ell1):
+        mod = rr.modelo
         ell2 = rr.fila.get("ell_trasero_mm", 0.0) * MM
         tramos = [(res.x_b0, res.x_b0 + ell1)]
         if ell2 > 0:

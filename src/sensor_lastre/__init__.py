@@ -1,4 +1,4 @@
-"""Volumen utilizable y lastre del sensor remolcado del Barracuda (DBF 2026-27, UPB).
+"""Volumen utilizable y lastre del sensor remolcado (DBF 2026-27, UPB).
 
 Internamente todo está en SI (m, kg, s, rad). La E/S (YAML, CSV) usa mm, g, cm³ y grados.
 """

@@ -1,4 +1,4 @@
-# sensor-lastre · Barracuda DBF 2026-27 (UPB)
+# sensor-lastre · DBF 2026-27 (UPB)
 
 Herramienta de dimensionamiento del **lastre del sensor remolcado**. A partir de la geometría del
 sensor (un `.ork` de OpenRocket más un barrido de parámetros definido en YAML) calcula cuánto

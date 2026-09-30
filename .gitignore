@@ -227,5 +227,5 @@ figs/*
 resultados_*.zip
 
 # --- sensor_opt ---
-data_opt/
-figs_opt/
+data_opt*/
+figs_opt*/

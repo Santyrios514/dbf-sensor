@@ -99,6 +99,10 @@ class Restricciones:
     c_min: float
     eps_CN: float
     angulo_cola_max: float | None  # rad
+    # arrastre de la cola (modelo de OpenRocket/Hoerner, ver geometria.fraccion_base_roma)
+    fineza_sin_arrastre: float = 3.0  # L_t/ΔD ≥ esto: la cola no suma arrastre de base (≈ 9.5°)
+    fineza_base_roma: float = 1.0  # L_t/ΔD ≤ esto: la cola equivale a una base roma (≈ 26.6°)
+    base_roma_infactible: bool = True
 
 
 @dataclass(frozen=True)
@@ -163,7 +167,8 @@ class ConfigOpt:
         D = [float(d) * MM for d in self.malla["D_mm"]]
         k = [float(v) for v in self.malla["k"]]
         r_tip_max = max(float(v) for v in self.malla["r_tip_rel_R"]) * max(D) / 2
-        return {"D_ap_lo": min(D), "D_ap_hi": 2 * r_tip_max, "k_lo": min(k), "k_hi": max(k)}
+        # f3 usa el k efectivo (con la fracción de base roma), que llega a 1 con una cola roma
+        return {"D_ap_lo": min(D), "D_ap_hi": 2 * r_tip_max, "k_lo": min(k), "k_hi": 1.0}
 
     def dir_salida(self) -> Path:
         return self._ruta(self.salida.get("dir", "data_opt"))
@@ -177,6 +182,22 @@ class ConfigOpt:
 
 
 # --------------------------------------------------------------------------- carga
+
+
+def _fineza(angulo_deg: float) -> float:
+    """L_t/ΔD de una cola cónica equivalente con ese semiángulo: 1 / (2 tan θ)."""
+    return 1.0 / (2.0 * math.tan(math.radians(angulo_deg)))
+
+
+def _base_roma(b: dict, errores: list[str]) -> dict:
+    """restricciones.cola_base_roma en ángulos → finezas L_t/ΔD (las de OpenRocket: 3 y 1)."""
+    a0 = float(b.get("angulo_inicio_deg", math.degrees(math.atan(1 / 6))))
+    a1 = float(b.get("angulo_base_roma_deg", math.degrees(math.atan(0.5))))
+    if not 0 < a0 < a1 < 90:
+        errores.append("restricciones.cola_base_roma: se requiere 0 < angulo_inicio_deg < angulo_base_roma_deg < 90")
+        return {}
+    return {"fineza_sin_arrastre": _fineza(a0), "fineza_base_roma": _fineza(a1),
+            "base_roma_infactible": bool(b.get("infactible", True))}
 
 
 def _resolver(ruta: str, *bases: Path) -> Path:
@@ -245,7 +266,8 @@ def cargar(ruta: str | Path | dict, raiz: Path | None = None) -> ConfigOpt:
         SM_min=float(r["SM_min_cal"]), SM_max=float(r["SM_max_cal"]), k_min=float(r["k_min"]),
         h_min=float(r.get("h_min_mm", 5.0)) * MM, c_min=float(r.get("c_min_mm", 5.0)) * MM,
         eps_CN=float(r.get("eps_CN", 0.5)),
-        angulo_cola_max=None if r.get("angulo_cola_max_deg") is None else math.radians(float(r["angulo_cola_max_deg"])))
+        angulo_cola_max=None if r.get("angulo_cola_max_deg") is None else math.radians(float(r["angulo_cola_max_deg"])),
+        **_base_roma(r.get("cola_base_roma") or {}, errores))
     if not rest.SM_max > rest.SM_min:
         errores.append("restricciones: SM_max_cal debe ser > SM_min_cal")
     if not rest.k_min > 0:

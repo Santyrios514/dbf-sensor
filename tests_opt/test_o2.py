@@ -85,6 +85,7 @@ def test_T5_masa_activa_lastre_contiguo_y_m_max(raw):
 def test_T5_SM_activo_da_SM_min(raw):
     raw["masa"]["m_max_g"] = 1e6
     cfg = cargar(raw)
+    cfg.base_raw["remolque"]["tol_amarre_min_mm"] = None  # aísla la restricción de SM
     cu = _cuerpo(cfg, D=65, lt=1.0, k=0.3)
     encontrado = False
     for a in cfg.aletas():
@@ -139,8 +140,10 @@ def test_tolerancias_implicitas_en_unidades(cfg_default):
 
 
 def test_f_valores(cfg_default):
-    F = f_valores(cfg_default, [6.2, 3.1], [0.060, 0.168], [0.15, 0.6], [1.5, 2.0])
+    F = f_valores(cfg_default, [6.2, 3.1], [0.060, 0.168], [0.15, 1.0], [1.5, 2.0])  # k efectivo
     assert np.allclose(F[0], [0, 0, 0, 0]) and np.allclose(F[1], [0.5, 1, 1, 1])
+    F = f_valores(cfg_default, [6.2], [0.060], [0.6], [1.5])
+    assert F[0, 2] == pytest.approx((0.6 - 0.15) / 0.85)
 
 
 def test_pareto():

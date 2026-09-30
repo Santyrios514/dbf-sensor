@@ -277,6 +277,7 @@ def _caso_opt(raw, trasero, h=30, e=40, SM_min=1.0):
     raw["lastre"]["lastre_trasero"] = trasero
     raw["estabilidad"]["SM_min_cal"] = SM_min
     raw["lastre"]["masa_max_sensor_g"] = None  # óptimo sin tope de masa
+    raw["remolque"]["tol_amarre_min_mm"] = None  # ni tolerancia de amarre mínima
     cfg = cargar(solo(raw, 350, 65))
     return cfg.casos[0], cfg.rellenos[0]
 
@@ -553,6 +554,40 @@ def test_figuras_dibujan_el_tapon_real_con_tope_de_masa(raw, tmp_path, monkeypat
 
 def test_ell_delantero_sin_tope_es_ell_SM_max(raw):
     raw["lastre"]["masa_max_sensor_g"] = None
+    raw["remolque"]["tol_amarre_min_mm"] = None
     cfg = cargar(solo(raw, 350, 65))
     rr = analizar_caso(cfg.casos[0], rellenos=[cfg.rellenos[0]]).rellenos[0]
     assert rr.ell_delantero == pytest.approx(rr.ventana.ell_SM_max)
+
+
+# --------------------------------------------------------------------------- tolerancia de amarre mínima
+
+
+def _fila_tol(raw, tol_min, h=40, e=20):
+    raw["geometria_base"]["aletas"]["h_tip"]["valor"] = h
+    raw["geometria_base"]["aletas"]["extension"]["valor"] = e
+    raw["lastre"]["masa_max_sensor_g"] = None
+    raw["remolque"]["tol_amarre_min_mm"] = tol_min
+    cfg = cargar(solo(raw, 350, 65))
+    return analizar_caso(cfg.casos[0], rellenos=[cfg.rellenos[0]]).rellenos[0].fila
+
+
+def test_tol_amarre_minima_recorta_el_lastre(raw):
+    libre = _fila_tol(raw, None)
+    tope = libre["tol_amarre_mm"] * 1.3  # exige más holgura de la que da el óptimo libre
+    f = _fila_tol(copy.deepcopy(raw), tope)
+    assert f["limitante_masa"] == "tol_amarre"
+    assert f["tol_amarre_mm"] == pytest.approx(tope, rel=2e-3) and f["tol_amarre_mm"] >= tope * (1 - 1e-3)
+    assert f["m_total_g"] < libre["m_total_g"] and f["SM_cal"] >= 1.0 - 1e-6
+    assert f["m_relleno_trasero_g"] <= libre["m_relleno_trasero_g"]  # se quita primero el trasero
+
+
+def test_tol_amarre_holgada_no_cambia_nada(raw):
+    libre = _fila_tol(raw, None)
+    f = _fila_tol(copy.deepcopy(raw), 0.01)
+    assert f["m_relleno_g"] == pytest.approx(libre["m_relleno_g"]) and f["limitante_masa"] == libre["limitante_masa"]
+
+
+def test_tol_amarre_inalcanzable(raw):
+    f = _fila_tol(raw, 500.0)
+    assert "tol_amarre_inalcanzable" in f["banderas"] and not math.isfinite(f.get("m_relleno_g", math.nan))

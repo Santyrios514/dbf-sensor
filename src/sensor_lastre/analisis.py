@@ -192,6 +192,45 @@ def _ubicar_masa(mod: ModeloLastre, m_obj: float, ell_geo: float, trasero: bool,
     return ell, ell2
 
 
+def _recortar_por_amarre(mod: ModeloLastre, ell1: float, ell2: float, x_CP: float, D_ref: float,
+                         SM_min: float, q: float, S_ref: float, CNa: float, alpha_max: float, tol_min: float,
+                         nu) -> tuple[float, float]:
+    """Punto de mayor masa, sobre el camino de llenado, con tol_amarre ≥ tol_min y SM ≥ SM_min.
+
+    El camino es el orden de llenado: tapón delantero de 0 a ℓ_1 y después el trasero de 0 a ℓ_2,
+    así que la masa crece a lo largo de él y, para cada masa, el CG es el más adelantado posible.
+    Se busca el último punto factible en una malla del camino y se afina con brentq.
+    (NaN, NaN) si ningún punto cumple.
+    """
+    def punto(s):
+        return (min(s, ell1), max(s - ell1, 0.0))
+
+    def holgura(s):
+        a, b = punto(s)
+        m = float(mod.m_con_trasero(a, b))
+        xcg = float(mod.x_CG_con_trasero(a, b))
+        tol = tolerancia_amarre(m, xcg, x_CP, q, S_ref, CNa, alpha_max)
+        h_tol = (tol - tol_min) / tol_min if math.isfinite(tol) else -1.0
+        return min(h_tol, (x_CP - xcg) / D_ref - SM_min + 1e-6)
+
+    s_tot = ell1 + ell2
+    if holgura(s_tot) >= 0:
+        return ell1, ell2
+    n = max(int(nu.n_ell) // 10, 40)
+    ss = np.linspace(0.0, s_tot, n)
+    h = np.array([holgura(s) for s in ss])
+    ok = np.nonzero(h >= 0)[0]
+    if not ok.size:
+        return math.nan, math.nan
+    i = int(ok[-1])
+    s = ss[i]
+    if i + 1 < n:
+        s = brentq(holgura, ss[i], ss[i + 1], xtol=nu.tol)
+        if holgura(s) < 0:  # brentq entrega el borde; se asegura el lado factible
+            s = max(s - nu.tol, ss[i])
+    return punto(s)
+
+
 def _analizar_relleno(res: ResultadoCaso, rel: Relleno) -> ResultadoRelleno:
     caso, cav, mv = res.caso, res.cav, res.mv
     g, nu, vu, es = caso.geom, caso.numerico, caso.vuelo, caso.estabilidad
@@ -286,6 +325,16 @@ def _analizar_relleno(res: ResultadoCaso, rel: Relleno) -> ResultadoRelleno:
                     banderas.append("SM_inalcanzable_con_masa_max")
                     ell = math.nan
                 ell_u = ell
+            if caso.remolque.tol_min is not None and math.isfinite(ell_u):
+                # Tolerancia de amarre mínima: si el óptimo no la cumple, se retrocede en el orden
+                # de llenado (primero se quita el tapón trasero, luego se acorta el delantero).
+                l1, l2 = _recortar_por_amarre(mod, ell_u, ell2, x_CP, D_ref, es.SM_min, vu.q, S_ref, CNa,
+                                              caso.remolque.alpha_max, caso.remolque.tol_min, nu)
+                if not math.isfinite(l1):
+                    banderas.append("tol_amarre_inalcanzable")
+                elif (l1, l2) != (ell_u, ell2):
+                    limitante = "tol_amarre"
+                ell_u, ell2 = l1, l2
         if math.isfinite(ell_u):
             V1 = float(mod.V_b(ell_u))
             V2 = float(mod.V_tras(ell_u, ell2))

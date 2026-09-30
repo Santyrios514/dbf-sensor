@@ -153,7 +153,7 @@ def verificar_candidato(cfg: ConfigOpt, pr: PuenteOpt, fila: pd.Series, cal: Cal
                 "motivos_or": ";".join(Ll.motivos)})
     for comp, (m, _) in mas.por_componente.items():
         out[f"m_or_{comp}_g"] = m / G
-    F = f_valores(cfg, [f["m_total_g"] * G], [fila["D_ap_mm"] * MM], [fila["k"]], [out["SM_or_cal"]])
+    F = f_valores(cfg, [f["m_total_g"] * G], [fila["D_ap_mm"] * MM], [fila["k_efectivo"]], [out["SM_or_cal"]])
     out["J_or"] = float(J(cfg, F)[0])
     if guardar is not None:
         pr.guardar(guardar)

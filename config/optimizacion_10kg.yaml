@@ -1,3 +1,4 @@
+# Variante de optimizacion.yaml con masa máxima del sensor de 10 kg.
 # Módulo de optimización del sensor (sensor_opt, spec v3). Unidades de E/S: mm, g, kg/m³, grados.
 base_config: config/config.yaml    # hereda pared, electrónica, masas puntuales, lastre, remolque, vuelo, OR
 
@@ -6,7 +7,7 @@ materiales:                        # se suman (o sobrescriben) a los de base_con
   plomo: 11340
 
 masa:
-  m_max_g: 6200                    # masa TOTAL del sensor: presupuesto con MTOW 16 kg (ver config.yaml, lastre)
+  m_max_g: 10000                   # masa TOTAL del sensor (corrida pedida: 10 kg)
   factor_llenado: 1.0
 
 geometria_fija:
@@ -59,7 +60,7 @@ ejecucion:
   max_evaluaciones: 2000000
   procesos: auto                   # auto = núcleos disponibles
   refinamiento: {activar: true, top_K: 10}
-  verificacion_or: {N_verif: 20, N_cal: 30, tol_cp_mm: 2.0, max_iter_calibracion: 3}
+  verificacion_or: {N_verif: 20, N_cal: 30, tol_cp_mm: 2.0, max_iter_calibracion: 1}   # verificación rápida
   semilla: 12345
 
 numerico:
@@ -68,6 +69,6 @@ numerico:
   tol_masa_max_g: 0.5              # m_total ≥ m_max − tol cuenta como "alcanza m_max" (Pareto)
 
 salida:
-  dir: data_opt
-  dir_figuras: figs_opt
+  dir: data_opt_10kg
+  dir_figuras: figs_opt_10kg
   exportar_ork_top: 5

@@ -29,10 +29,11 @@ G = 1e-3
 MM = 1e-3
 
 # limitante_masa de sensor_lastre → restriccion_activa de la spec v3
-RESTRICCION = {"masa_max_sensor": "masa", "SM": "SM_min", "geometria": "volumen"}
+RESTRICCION = {"masa_max_sensor": "masa", "SM": "SM_min", "geometria": "volumen", "tol_amarre": "tol_amarre"}
 # banderas del código actual que invalidan el candidato (restricciones heredadas, v3 §3.7.6)
 BANDERAS_INFACTIBLES = ("inviable_geo", "SM_inalcanzable", "SM_inalcanzable_por_geometria",
-                        "SM_inalcanzable_con_masa_max", "inestable_respecto_remolque", "trim_no_lineal")
+                        "SM_inalcanzable_con_masa_max", "tol_amarre_inalcanzable", "inestable_respecto_remolque",
+                        "trim_no_lineal")
 
 
 @dataclass

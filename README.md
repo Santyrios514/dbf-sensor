@@ -82,6 +82,13 @@ Para cada configuración:
    `SM_inalcanzable_con_masa_max`. El tope sale del presupuesto de peso del avión (MTOW menos
    vacío menos margen), documentado en el YAML.
 
+4. **Tolerancia de amarre mínima** (`remolque.tol_amarre_min_mm`, 1.5 mm por defecto). Si el
+   óptimo deja una tolerancia menor, se retrocede en el orden de llenado (primero se quita el
+   tapón trasero, después se acorta el delantero) hasta el punto de mayor masa que cumple
+   $\text{tol}_{amarre} \ge \text{tol}_{min}$ y $SM \ge SM_{min}$ (`limitante_masa = tol_amarre`). Como
+   $\text{tol}_{amarre} \propto (x_{CP}-x_{CG})/m$, con mucho lastre exige más SM o más $C_{N\alpha}$;
+   si ningún punto la cumple se marca `tol_amarre_inalcanzable`.
+
 `optimo.csv` filtra las configuraciones que cumplen las banderas de `optimizacion.exigir` y las
 ordena por masa total del sensor. Los empates al gramo (tope de masa o cavidad llena) se resuelven por mayor SM, luego
 menor D acostado y luego menor D parado. `limitante_masa` indica si la masa la limitó el SM, la
@@ -180,6 +187,13 @@ Salidas en `data_opt/`: `ranking.csv` (todos los candidatos, con `factible` y `m
   porque nada en el objetivo lo premia. El flutter se verifica por candidato con la fórmula de
   Martin (NACA TN 4197) sobre la aleta trapezoidal equivalente (`V_flutter_m_s`, bandera
   `flutter_margen_bajo` si $V_f < 3V$); a 30 m/s nunca gobierna.
+- **Colas de base roma.** El criterio 3 no usa $k$ sino un **$k$ efectivo** con el mismo modelo
+  de arrastre de la cola que OpenRocket (datos de Hoerner): con fineza $L_t/\Delta D$
+  ($\Delta D = D - d_a$) mayor o igual que 3 (≈ 9.5°) la cola no suma arrastre de base; con 1 o
+  menos (≈ 26.6°) equivale a una base roma; entre ambas suma la fracción $f_b = (3 - L_t/\Delta D)/2$.
+  El área de base equivalente da $k_{ef} = \sqrt{k^2 + f_b\,(1-k^2)}$, que vale $k$ sin separación y
+  1 con la cola roma. Las colas con $L_t/\Delta D \le 1$ son infactibles (`cola_base_roma`). Todo se
+  ajusta en `restricciones.cola_base_roma` (ángulos de inicio y de base roma, `infactible`).
 - **$k$ es la única variable de taper.** Con el mismo $k$, una cola corta es más empinada y puede
   separar el flujo; la resistencia de presión crece claramente por encima de ~9° y la cola se
   comporta como base roma cerca de 27° (datos de Hoerner que usa OpenRocket). Revisen
@@ -278,6 +292,7 @@ material, sin mecanizado, moldes ni envío.
 | `no_unimodal` | $x_{CG}(\ell)$ tiene más de un valle o la ventana está partida (ver `ventanas.csv`) |
 | `SM_inalcanzable_con_masa_max` | con el lastre que permite el tope de masa del sensor, el SM no llega a SM_min |
 | `inestable_respecto_remolque` | $x_{CP} \le x_T$ |
+| `tol_amarre_inalcanzable` | ningún llenado cumple a la vez `remolque.tol_amarre_min_mm` y SM ≥ SM_min |
 | `trim_no_lineal` | $\lvert\alpha_{trim}\rvert$ > `alpha_lineal_max_deg`: la fórmula lineal deja de valer |
 | `dif_CP_alta` | $\lvert x_{CP,OR} - x_{CP,interno}\rvert$ > `dif_CP_max_frac_L` · L |
 | `dif_masa_alta` | la masa de algún componente difiere de OpenRocket más de lo tolerado (detecta, por ejemplo, una transición marcada *Filled*) |

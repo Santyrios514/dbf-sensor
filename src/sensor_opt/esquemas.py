@@ -3,7 +3,7 @@
 RANKING = [
     # spec v3 §7
     "cand_id", "factible", "motivos", "J", "f1", "f2", "f3", "f4", "D_mm", "cola_forma", "cola_parametro",
-    "L_t_mm", "k", "theta_eq_deg", "lambda_LE", "x_LE_mm", "c_r_mm", "r_LE_mm", "r_TE_raiz_mm", "r_tip_mm",
+    "L_t_mm", "k", "theta_eq_deg", "fineza_cola", "f_base_roma", "k_efectivo", "lambda_LE", "x_LE_mm", "c_r_mm", "r_LE_mm", "r_TE_raiz_mm", "r_tip_mm",
     "h_mm", "c_t_mm", "x_s_mm", "A_aleta_mm2", "V_flutter_m_s", "flutter_margen_bajo", "m_aletas_g", "D_ap_mm",
     "h_45_mm", "m_total_g", "m_lastre_g", "ell_mm", "restriccion_activa", "x_CG_mm", "x_CP_sust_mm",
     "x_CP_cal_mm", "SM_cal", "CN_alpha_total", "alpha_trim_deg", "en_pareto", "verificado_or", "x_CP_or_mm",

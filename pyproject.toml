@@ -5,7 +5,7 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "sensor-lastre"
 version = "0.1.0"
-description = "Volumen utilizable y lastre del sensor remolcado del Barracuda (DBF 2026-27, UPB)"
+description = "Volumen utilizable y lastre del sensor remolcado (DBF 2026-27, UPB)"
 requires-python = ">=3.10"
 dependencies = [
     "numpy",

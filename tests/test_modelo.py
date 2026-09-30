@@ -517,3 +517,42 @@ def test_masa_max_sensor_sin_SM(raw):
     f = _fila_plomo(raw)
     assert "SM_inalcanzable_con_masa_max" in f["banderas"]
     assert not math.isfinite(f.get("m_relleno_g", math.nan))
+
+
+def _extension_lastre(ruta_fn, res, rr, tmp_path, monkeypatch):
+    """Máximo x [mm] de la franja de lastre delantero que dibuja la figura."""
+    from sensor_lastre import figuras
+    figs = []
+    monkeypatch.setattr(figuras.plt, "close", lambda f=None: figs.append(f))
+    ruta_fn(res, rr, tmp_path / "f.png")
+    xs = []
+    for ax in figs[0].axes:
+        for col in ax.collections:
+            if (col.get_label() or "").startswith("lastre"):
+                xs.append(max(p.vertices[:, 0].max() for p in col.get_paths()))
+    return xs[0]
+
+
+def test_figuras_dibujan_el_tapon_real_con_tope_de_masa(raw, tmp_path, monkeypatch):
+    """Con el tope de masa activo, el tapón delantero dibujado mide ℓ = ℓ(m_delantero) y no ℓ_SM,max."""
+    from sensor_lastre.figuras import fig_dibujo, fig_perfil
+    raw["geometria_base"]["aletas"]["h_tip"]["valor"] = 40
+    raw["lastre"]["masa_max_sensor_g"] = 2000
+    cfg = cargar(solo(raw, 350, 65))
+    res = analizar_caso(cfg.casos[0], rellenos=[cfg.rellenos[0]])
+    rr = res.rellenos[0]
+    f = rr.fila
+    assert f["limitante_masa"] == "masa_max_sensor" and f["m_relleno_trasero_g"] == 0
+    ell = rr.modelo.ell_de_masa(f["m_relleno_g"] * 1e-3, cfg.casos[0].numerico.tol)
+    assert rr.ell_delantero == pytest.approx(ell, abs=cfg.casos[0].numerico.tol)
+    assert rr.ell_delantero < rr.ventana.ell_SM_max - 0.01  # sin el arreglo se dibujaba ℓ_SM,max
+    esperado = (res.x_b0 + rr.ell_delantero) / MM
+    for fn in (fig_perfil, fig_dibujo):
+        assert _extension_lastre(fn, res, rr, tmp_path, monkeypatch) == pytest.approx(esperado, abs=0.2)
+
+
+def test_ell_delantero_sin_tope_es_ell_SM_max(raw):
+    raw["lastre"]["masa_max_sensor_g"] = None
+    cfg = cargar(solo(raw, 350, 65))
+    rr = analizar_caso(cfg.casos[0], rellenos=[cfg.rellenos[0]]).rellenos[0]
+    assert rr.ell_delantero == pytest.approx(rr.ventana.ell_SM_max)

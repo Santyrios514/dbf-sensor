@@ -24,7 +24,7 @@ RESULTADOS = [
     "m_total_geo_g", "x_CG_geo_mm", "SM_geo_cal", "ell_star_mm", "x_CG_min_mm",
     "SM_max_alcanzable_cal", "SM_inf_cal", "margen_SM_inf_cal", "ell_SM_min_mm", "ell_SM_max_mm",
     "V_util_cm3", "eta_int", "eta_ext", "m_relleno_g", "m_relleno_trasero_g",
-    "costo_relleno_usd", "ell_trasero_mm", "limitante_masa", "m_total_g", "x_CG_mm", "SM_cal", "x_CP_mm",
+    "costo_relleno_usd", "ell_delantero_mm", "ell_trasero_mm", "limitante_masa", "m_total_g", "x_CG_mm", "SM_cal", "x_CP_mm",
     "x_CP_fuente", "dx_CP_or_vs_interno_mm", "CN_alpha_rad", "x_T_mm", "alpha_trim_geo_deg",
     "alpha_trim_deg", "x_T_trim_cero_mm", "tol_amarre_mm", "m_casco_g", "A_aleta_mm2", "m_aletas_g",
     "x_CG_aletas_mm", "m_mamparos_g", "m_electronica_g", "m_puntuales_g", "dif_masa_or_pct",
@@ -42,7 +42,7 @@ CURVA = ["ell_mm", "V_b_cm3", "m_b_g", "m_total_g", "x_CG_mm", "SM_cal", "alpha_
 
 # Ranking por el criterio de optimización: máxima masa de lastre con SM ≥ SM_min.
 OPTIMO = ["relleno", "puesto", "config_id", "m_relleno_g", "m_relleno_trasero_g", "costo_usd_kg",
-          "costo_relleno_usd", "m_total_g", "SM_cal", "limitante_masa", "ell_SM_max_mm", "ell_trasero_mm",
+          "costo_relleno_usd", "m_total_g", "SM_cal", "limitante_masa", "ell_SM_max_mm", "ell_delantero_mm", "ell_trasero_mm",
           "x_CG_mm", "x_CP_mm", "x_T_trim_cero_mm", "tol_amarre_mm", "alpha_trim_deg", "D_acostado_mm",
           "D_parado_mm", "h_env_mm", "w_env_mm", "L_total_mm", "cabe_alto", "cabe_ancho", "cabe_largo"]
 
@@ -59,3 +59,12 @@ VENTANAS = ["config_id", "relleno", "desde_mm", "hasta_mm"]
 BANDERAS = ("inviable_geo", "SM_inalcanzable", "SM_inalcanzable_por_geometria", "margen_SM_bajo",
             "no_unimodal", "inestable_respecto_remolque", "trim_no_lineal", "dif_CP_alta", "dif_masa_alta",
             "SM_inalcanzable_con_masa_max")
+
+# Validación con OpenRocket de los ganadores (script 02): interno frente a OpenRocket.
+VALIDACION_OR = ["grupo", "config_id", "relleno", "puesto_interno", "estado_or", "ganador",
+                 "m_total_int_g", "m_total_or_g", "m_relleno_int_g", "m_relleno_or_g", "SM_int_cal", "SM_or_cal",
+                 "x_CP_int_mm", "x_CP_or_mm", "dx_CP_mm", "limitante_int", "limitante_or", "dif_masa_or_pct",
+                 "banderas_or", "or_warnings"]
+
+# Ganador validado por grupo: las columnas de RESULTADOS (calculadas con OpenRocket) van detrás.
+GANADORES = ["grupo", "n_validados"]

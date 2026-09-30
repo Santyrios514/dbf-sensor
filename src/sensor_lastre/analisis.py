@@ -53,6 +53,14 @@ class ResultadoRelleno:
     curva: pd.DataFrame
     presupuestos: list[dict]
 
+    @property
+    def ell_delantero(self) -> float:
+        """Largo real del tapón delantero del óptimo [m]; NaN si no hay óptimo.
+
+        Es ℓ_SM,max salvo con el tope de masa del sensor activo, donde el tapón se recorta."""
+        v = self.fila.get("ell_delantero_mm")
+        return v * MM if v is not None and math.isfinite(v) else NAN
+
 
 @dataclass
 class ResultadoCaso:
@@ -295,7 +303,7 @@ def _analizar_relleno(res: ResultadoCaso, rel: Relleno) -> ResultadoRelleno:
                 "x_T_trim_cero_mm": xcg_u / MM,
                 "tol_amarre_mm": tolerancia_amarre(m_u, xcg_u, x_CP, vu.q, S_ref, CNa,
                                                    caso.remolque.alpha_max) / MM,
-                "ell_trasero_mm": ell2 / MM,
+                "ell_delantero_mm": ell_u / MM, "ell_trasero_mm": ell2 / MM,
                 "costo_relleno_usd": rel.rho_b * Vu * rel.costo_usd_kg,
                 "m_relleno_trasero_g": rel.rho_b * V2 / G, "limitante_masa": limitante,
             })

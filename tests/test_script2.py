@@ -1,4 +1,4 @@
-"""Script 2 de punta a punta y esquemas de los CSV (v1 §7 + v2 §7)."""
+"""Script 1 (barrido con el modelo propio) de punta a punta y esquemas de los CSV (v1 §7 + v2 §7)."""
 
 import subprocess
 import sys
@@ -14,7 +14,7 @@ from sensor_lastre.perfiles import muestrear
 
 from conftest import CONFIG, RAIZ
 
-SCRIPT = RAIZ / "scripts" / "02_volumen_lastre.py"
+SCRIPT = RAIZ / "scripts" / "01_volumen_lastre.py"
 MM = 1e-3
 
 
@@ -28,7 +28,7 @@ def _correr(*args, config=CONFIG):
 @pytest.fixture(scope="module")
 def salida_sin_orlab(tmp_path_factory):
     d = tmp_path_factory.mktemp("datos")
-    _correr("--sin-orlab", "--dir-datos", str(d))
+    _correr("--dir-datos", str(d))  # modelo propio: el modo por defecto
     return d
 
 
@@ -70,7 +70,7 @@ def test_cobertura_barrido(salida_sin_orlab):
 
 
 def _simular_script1(caso, cfg, d, dx_CP_mm=3.0):
-    """Escribe los 4 CSV del script 1 a partir del modelo analítico (sin JVM)."""
+    """Escribe los 4 or_*.csv (exportación de OpenRocket) a partir del modelo analítico (sin JVM)."""
     g = caso.geom
     muestrear(g, cfg.openrocket["n_muestras_perfil"], caso.id)[esquemas.OR_PERFILES].to_csv(
         d / "or_perfiles.csv", index=False)
@@ -92,7 +92,7 @@ def test_modo_csv_openrocket(tmp_path):
     cfg = cargar(CONFIG)
     caso = cfg.caso("base_ork")
     _simular_script1(caso, cfg, tmp_path)
-    _correr("--sin-orlab", "--solo", caso.id, "--dir-datos", str(tmp_path / "base"))
+    _correr("--solo", caso.id, "--dir-datos", str(tmp_path / "base"))
     ref = pd.read_csv(tmp_path / "base" / "resultados.csv").iloc[0]
     args = [f"--or-{k}={tmp_path / f'or_{k}.csv'}" for k in ("resumen", "perfiles", "aletas", "componentes")]
     _correr(*args, "--solo", caso.id, "--dir-datos", str(tmp_path / "or"))
@@ -107,6 +107,18 @@ def test_modo_csv_openrocket(tmp_path):
 
 
 def test_faltan_csv_de_openrocket(tmp_path):
-    r = subprocess.run([sys.executable, str(SCRIPT), "--config", str(CONFIG), "--sin-figuras",
+    r = subprocess.run([sys.executable, str(SCRIPT), "--config", str(CONFIG), "--sin-figuras", "--con-orlab",
                         "--dir-datos", str(tmp_path)], capture_output=True, text=True)
-    assert r.returncode == 2 and "--sin-orlab" in r.stderr
+    assert r.returncode == 2 and "--todos" in r.stderr
+
+
+def test_figuras_por_defecto_solo_dibujos(tmp_path):
+    """Por rendimiento, el perfil y las curvas CG/SM por configuración son opcionales."""
+    r = subprocess.run([sys.executable, str(SCRIPT), "--config", str(CONFIG), "--solo", "base_ork",
+                        "--dir-datos", str(tmp_path / "d"), "--dir-figuras", str(tmp_path / "f")],
+                       capture_output=True, text=True)
+    assert r.returncode == 0, r.stderr
+    nombres = {p.name for p in (tmp_path / "f").iterdir()}
+    assert "dibujo__base_ork.png" in nombres
+    assert not any(n.startswith(("perfil__", "cg_sm__")) for n in nombres)
+    assert "02_validar_openrocket" in r.stdout

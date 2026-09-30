@@ -225,3 +225,7 @@ figs/*
 
 # paquetes de resultados generados localmente
 resultados_*.zip
+
+# --- sensor_opt ---
+data_opt/
+figs_opt/

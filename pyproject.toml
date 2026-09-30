@@ -23,5 +23,5 @@ dev = ["pytest"]
 where = ["src"]
 
 [tool.pytest.ini_options]
-testpaths = ["tests"]
+testpaths = ["tests", "tests_opt"]
 pythonpath = ["src"]

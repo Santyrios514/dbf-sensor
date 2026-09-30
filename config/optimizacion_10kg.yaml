@@ -60,7 +60,7 @@ ejecucion:
   max_evaluaciones: 2000000
   procesos: auto                   # auto = núcleos disponibles
   refinamiento: {activar: true, top_K: 10}
-  verificacion_or: {N_verif: 20, N_cal: 30, tol_cp_mm: 2.0, max_iter_calibracion: 3}
+  verificacion_or: {N_verif: 20, N_cal: 30, tol_cp_mm: 2.0, max_iter_calibracion: 1}   # verificación rápida
   semilla: 12345
 
 numerico:

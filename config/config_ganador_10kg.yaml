@@ -1,5 +1,5 @@
 # Generado por scripts/06_ganador_a_config.py desde /home/user/dbf-sensor/data_opt_10kg/ranking.csv
-# Candidato: D70_parabolica1_Lt0.8_k0.15_l0_m1_r2_g0.7_s1
+# Candidato: D70_parabolica1_Lt0.9_k0.15_l0_m1_r2.4_g0.7_s1
 # Geometría del ganador de la optimización; el resto hereda config/config.yaml.
 unidades:
   longitud: mm
@@ -50,7 +50,7 @@ geometria_base:
     recortada: true
     longitud:
       modo: absoluto_mm
-      valor: 56.00000000000001
+      valor: 63.000000000000014
     diametro_popa:
       modo: absoluto_mm
       valor: 10.5
@@ -64,13 +64,13 @@ geometria_base:
     rotacion_deg: 45.0
     c_r:
       modo: absoluto_mm
-      valor: 56.0
+      valor: 63.0
     x_tip_le:
       modo: absoluto_mm
-      valor: 16.8
+      valor: 18.9
     h_tip:
       modo: absoluto_mm
-      valor: 35.0
+      valor: 49.0
     extension:
       modo: absoluto_mm
       valor: 0.0
@@ -136,6 +136,7 @@ remolque:
     modo: en_CG
   alpha_trim_max_deg: 5.0
   alpha_lineal_max_deg: 15.0
+  tol_amarre_min_mm: 1.5
 envolvente:
   largo_max_mm: null
   alto_max_mm: null

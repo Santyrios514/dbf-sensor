@@ -57,7 +57,7 @@ def corrida(tmp_path_factory):
     raw["ejecucion"]["verificacion_or"] = {"N_verif": 5, "N_cal": 8, "tol_cp_mm": 2.0, "max_iter_calibracion": 2}
     ruta = d / "opt.yaml"
     ruta.write_text(yaml.safe_dump(raw, allow_unicode=True))
-    for s in ("03_optimizar_malla.py", "04_verificar_openrocket.py"):
+    for s in ("04_optimizar_malla.py", "05_verificar_openrocket.py"):
         r = subprocess.run([sys.executable, str(RAIZ / "scripts" / s), "--config", str(ruta), "--procesos", "2"],
                            capture_output=True, text=True, timeout=1800)
         assert r.returncode == 0, s + "\n" + r.stdout[-3000:] + r.stderr[-3000:]

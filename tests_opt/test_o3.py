@@ -84,7 +84,7 @@ def test_limite_de_evaluaciones(tmp_path):
     raw["ejecucion"]["max_evaluaciones"] = 10
     ruta = tmp_path / "opt.yaml"
     ruta.write_text(yaml.safe_dump(raw, allow_unicode=True))
-    r = subprocess.run([sys.executable, str(RAIZ / "scripts" / "03_optimizar_malla.py"), "--config", str(ruta)],
+    r = subprocess.run([sys.executable, str(RAIZ / "scripts" / "04_optimizar_malla.py"), "--config", str(ruta)],
                        capture_output=True, text=True)
     assert r.returncode == 3 and "--forzar" in r.stderr
 

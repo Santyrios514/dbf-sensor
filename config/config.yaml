@@ -153,6 +153,11 @@ configuraciones:                # overrides explícitos por id; se SUMAN al barr
     L_mm: 350
     D_mm: 65
 
+validacion_or:                  # script 02: los ganadores del modelo propio se validan con OpenRocket
+  N_verif: 3                    # candidatos por grupo y por iteración
+  agrupar_por: []                # [] = un ganador por relleno; p. ej. [L_mm, D_mm]
+  max_iter: 3                   # rondas extra mientras un no validado pueda superar al mejor validado
+
 openrocket:
   ork_base: modelos/analisis_vol_int.ork
   jar: null                     # null -> ORLAB_JAR o caché de orlab

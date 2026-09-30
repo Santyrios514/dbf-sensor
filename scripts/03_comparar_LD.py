@@ -1,5 +1,7 @@
 #!/usr/bin/env python
-"""Script 3: comparación gruesa de pares (L_cuerpo, D) a partir de los resultados del script 2.
+"""Script 3: comparación gruesa de pares (L_cuerpo, D) a partir de los resultados del script 1 y,
+si existe, de la validación con OpenRocket del script 2 (ganadores.csv, un ganador por par con
+`validacion_or.agrupar_por: [L_mm, D_mm]`).
 
 Sirve para elegir con qué L y D correr luego el barrido fino de aletas. Para cada relleno y cada
 par (L, D) resume la mejor configuración factible según el mismo criterio de `optimizacion.ranking`
@@ -13,7 +15,8 @@ y cuántas de las variantes de aletas son factibles.
 
 Salidas (en dir_datos):
     comparacion_LD.csv           una fila por relleno × (L, D); incluye la caja mínima acostada
-                                 (L_total · D_acostado²) y los kg de lastre por litro de esa caja
+                                 (L_total · D_acostado²), los kg de lastre por litro de esa caja
+                                 y, si se validó, el ganador de OpenRocket de ese par (*_or)
     comparacion_LD_pivote.csv    masa máxima [g] de cada relleno en una tabla L × D
 Figura (en dir_figuras): comparacion_LD__{relleno}.png
 """
@@ -36,7 +39,8 @@ from sensor_lastre.optimizacion import ranking  # noqa: E402
 COLUMNAS = ["relleno", "L_mm", "D_mm", "L_total_mm", "n_variantes", "n_factibles", "frac_factibles",
             "m_relleno_max_g", "m_total_g", "costo_relleno_usd", "SM_cal", "tol_amarre_mm",
             "D_acostado_mm", "D_parado_mm", "V_caja_acostado_L", "kg_por_L_caja", "cabe_largo", "limitante_masa", "config_mejor",
-            "V_int_cm3", "m_casco_g", "SM_inf_max_cal", "puesto_LD"]
+            "V_int_cm3", "m_casco_g", "SM_inf_max_cal", "puesto_LD",
+            "config_ganador_or", "m_total_or_g", "m_relleno_or_g", "SM_or_cal", "x_CP_or_mm", "limitante_or"]
 
 
 def _args(argv=None):
@@ -89,6 +93,19 @@ def comparar(res: pd.DataFrame, exigir) -> pd.DataFrame:
     return out.reindex(columns=COLUMNAS)
 
 
+def con_validacion(comp: pd.DataFrame, ganadores: pd.DataFrame | None) -> pd.DataFrame:
+    """Agrega el ganador validado con OpenRocket de cada (relleno, L, D), si lo hay."""
+    if ganadores is None or ganadores.empty:
+        return comp.reindex(columns=COLUMNAS)
+    g = ganadores.rename(columns={"config_id": "config_ganador_or", "m_total_g": "m_total_or_g",
+                                  "m_relleno_g": "m_relleno_or_g", "SM_cal": "SM_or_cal", "x_CP_mm": "x_CP_or_mm",
+                                  "limitante_masa": "limitante_or"})
+    cols = ["config_ganador_or", "m_total_or_g", "m_relleno_or_g", "SM_or_cal", "x_CP_or_mm", "limitante_or"]
+    g = g[["relleno", "L_mm", "D_mm"] + cols].drop_duplicates(["relleno", "L_mm", "D_mm"])
+    out = comp.drop(columns=[c for c in cols if c in comp]).merge(g, on=["relleno", "L_mm", "D_mm"], how="left")
+    return out.reindex(columns=COLUMNAS)
+
+
 def _largo(v) -> str:
     """Marca de largo de bahía (cabe_largo no se exige: solo se informa)."""
     t = str(v).lower()
@@ -121,6 +138,8 @@ def _figura(res: pd.DataFrame, comp: pd.DataFrame, relleno: str, exigir, alto_ma
                        f"D_ac {f['D_acostado_mm']:.0f} mm\n{f['n_factibles']}/{f['n_variantes']} fact.\n"
                        f"L_tot {f['L_total_mm']:.0f} mm{_largo(f['cabe_largo'])}\n"
                        f"{f['kg_por_L_caja']:.2f} kg/L caja")
+                if isinstance(f.get("config_ganador_or"), str):
+                    txt += f"\nSM OpenRocket {f['SM_or_cal']:.2f}"
             else:
                 txt = f"sin factibles\n0/{f['n_variantes']}"
             oscuro = np.isfinite(f["m_relleno_max_g"]) and f["m_relleno_max_g"] / 1000 > 0.6 * vmax
@@ -169,7 +188,12 @@ def main(argv=None) -> int:
     alto_max = (cfg.raw.get("envolvente") or {}).get("alto_max_mm")
 
     res = pd.read_csv(dir_datos / "resultados.csv")
-    comp = comparar(res, exigir)
+    ruta_g = dir_datos / "ganadores.csv"
+    ganadores = pd.read_csv(ruta_g) if ruta_g.exists() else None
+    comp = con_validacion(comparar(res, exigir), ganadores)
+    if ganadores is None:
+        print("Sin validación con OpenRocket (ganadores.csv): los valores son del modelo propio. "
+              "Corra scripts/02_validar_openrocket.py para validarlos.")
     comp.to_csv(dir_datos / "comparacion_LD.csv", index=False, float_format="%.6g")
     piv = comp.pivot_table(index=["relleno", "L_mm"], columns="D_mm", values="m_relleno_max_g")
     piv.to_csv(dir_datos / "comparacion_LD_pivote.csv", float_format="%.0f")
@@ -179,7 +203,7 @@ def main(argv=None) -> int:
         print(f"\n=== {rel}  (exigido: {', '.join(exigir) or 'nada'})")
         print(c[["puesto_LD", "L_mm", "D_mm", "m_total_g", "m_relleno_max_g", "SM_cal", "D_acostado_mm", "D_parado_mm",
                  "V_caja_acostado_L", "kg_por_L_caja", "n_factibles", "n_variantes", "costo_relleno_usd",
-                 "config_mejor"]]
+                 "config_mejor", "SM_or_cal", "config_ganador_or"]]
               .to_string(index=False, float_format=lambda v: f"{v:.2f}"))
 
     if not a.sin_figuras:

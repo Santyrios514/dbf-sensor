@@ -1,7 +1,7 @@
 #!/usr/bin/env python
-"""Script 4 (v3): verificación y calibración con OpenRocket del ranking del script 3.
+"""Script 5 (v3): verificación y calibración con OpenRocket del ranking del script 4.
 
-    python scripts/04_verificar_openrocket.py --config config/optimizacion.yaml [--ranking data_opt/ranking.csv]
+    python scripts/05_verificar_openrocket.py --config config/optimizacion.yaml [--ranking data_opt/ranking.csv]
         [--procesos N] [--sin-figuras]
 
 Verifica los mejores y una muestra estratificada, calibra el CP sustituto, recalcula la malla si
@@ -49,7 +49,7 @@ def main(argv=None) -> int:
     dir_d, dir_f = cfg.dir_salida(), cfg.dir_figuras()
     ruta_rank = Path(a.ranking) if a.ranking else dir_d / "ranking.csv"
     if not ruta_rank.exists():
-        print(f"No existe {ruta_rank}: corra primero scripts/03_optimizar_malla.py", file=sys.stderr)
+        print(f"No existe {ruta_rank}: corra primero scripts/04_optimizar_malla.py", file=sys.stderr)
         return 2
     ranking = exportar.leer_ranking(ruta_rank)
     orc = cfg.base_raw.get("openrocket") or {}

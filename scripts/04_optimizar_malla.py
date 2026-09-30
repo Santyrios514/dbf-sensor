@@ -1,11 +1,11 @@
 #!/usr/bin/env python
-"""Script 3 (v3): barrido en malla de la geometría del sensor con el CP sustituto (sin JVM).
+"""Script 4 (v3): barrido en malla de la geometría del sensor con el CP sustituto (sin JVM).
 
-    python scripts/03_optimizar_malla.py --config config/optimizacion.yaml [--forzar] [--sin-refinamiento]
+    python scripts/04_optimizar_malla.py --config config/optimizacion.yaml [--forzar] [--sin-refinamiento]
         [--procesos N] [--sin-figuras]
 
 Salidas en `salida.dir` (ranking.csv, pareto.csv, tolerancias_implicitas.json) y figuras en
-`salida.dir_figuras`. El script 4 verifica con OpenRocket y reescribe el ranking final.
+`salida.dir_figuras`. El script 5 verifica con OpenRocket y reescribe el ranking final.
 """
 
 from __future__ import annotations

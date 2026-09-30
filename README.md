@@ -18,20 +18,30 @@ de la bahía donde se guarda el sensor.
 
 ## Cómo funciona
 
+Todos los flujos siguen el mismo patrón: **el barrido corre con el modelo propio** (perfil
+analítico y Barrowman interno, sin JVM, rápido) y **solo los ganadores se validan con
+OpenRocket**.
+
 ```
-config/*.yaml ──► 01_orlab_export.py ──► data/or_*.csv ──► 02_volumen_lastre.py ──► data/*.csv, figs/
-   (barrido)       (OpenRocket: CP,        (perfil, aletas,     (volumen, lastre, CG,        │
-                    C_Nα, masas, perfil)    CP por componente)   SM, trim, ranking)          ▼
-                                                                          03_comparar_LD.py (resumen L × D)
+config/*.yaml ──► 01_volumen_lastre.py ──► data/resultados.csv, optimo.csv ──► 02_validar_openrocket.py
+   (barrido)       (modelo propio: volumen,     (ranking interno)               (OpenRocket: los mejores
+                    lastre, CG, SM, trim)                                        de cada grupo → ganadores.csv)
+                                                                                        │
+                                                                   03_comparar_LD.py ◄──┘ (resumen L × D)
+
+config/optimizacion.yaml ──► 04_optimizar_malla.py ──► data_opt/ranking.csv ──► 05_verificar_openrocket.py
 ```
 
 1. **Geometría.** El YAML define nariz, cuerpo, cola (transición) y aletas freeform de cola.
    `barrido.parametros` genera las configuraciones (producto cartesiano o `zip`) y
    `configuraciones` agrega casos explícitos.
-2. **Aerodinámica (script 1).** Cada configuración se aplica sobre el `.ork` base mediante
-   OpenRocket 24.12 (orlab + JPype). Se exportan el perfil exterior, el polígono de aleta que
-   OpenRocket aceptó, el CP y el $C_{N\alpha}$ total y por componente, y las masas en vacío. Antes
-   de modificar nada, se verifica que la configuración `base_ork` coincide con el `.ork`.
+2. **Aerodinámica.** En el barrido (script 01) el perfil es analítico, con las mismas funciones
+   de forma de OpenRocket (incluido el recorte de elipsoide, potencia y Haack), y el CP sale del
+   Barrowman interno: forma general para nariz y cola y aletas freeform integradas por franjas
+   como `FinSetCalc`. En la validación (script 02) cada ganador se aplica sobre el `.ork` base con
+   OpenRocket 24.12 (orlab + JPype) y se vuelve a analizar con su perfil, su polígono de aleta,
+   su CP y su $C_{N\alpha}$ y sus masas por componente. Antes de modificar nada se verifica que la
+   configuración `base_ork` coincide con el `.ork`.
 3. **Volumen útil.** El perfil exterior se erosiona capa por capa (fibra + PLA, espesores del
    YAML) para obtener el radio interior $r_i(x)$. Las integrales acumuladas de área y momento se
    calculan por Simpson:
@@ -46,10 +56,13 @@ config/*.yaml ──► 01_orlab_export.py ──► data/or_*.csv ──► 02_
    admisible para un trim máximo $\alpha_{max}$:
    $$\text{tol}_{amarre}=\frac{\alpha_{max}\,q\,S_{ref}\,C_{N\alpha}\,(x_{CP}-x_{CG})}{m g}$$
 
-Sin OpenRocket (`--sin-orlab`), el perfil se genera analíticamente con las mismas funciones de
-forma de OpenRocket (incluido el recorte de elipsoide, potencia y Haack). El CP sale de un
-Barrowman interno: forma general para nariz y cola, y aletas freeform integradas por franjas
-como `FinSetCalc`.
+**Validación de ganadores (script 02).** Por grupo (relleno × `validacion_or.agrupar_por`) se
+validan los `N_verif` mejores del ranking interno. El ganador es el mejor **con los valores de
+OpenRocket**; si algún candidato sin validar todavía podría superarlo (más masa total, o la
+misma masa con más SM según el modelo propio), se validan los siguientes, hasta `max_iter`
+rondas. En el barrido base la diferencia de CP entre ambos modelos es de 0.5–3 mm con aletas de
+h_tip ≥ 30 mm y hasta ~12 mm con aletas chicas; donde manda el SM, eso cambia la masa admisible,
+y por eso el ganador final siempre se decide con OpenRocket.
 
 ## Criterio de optimización: máxima masa con SM ≥ SM_min
 
@@ -78,40 +91,43 @@ geometría o el tope de masa (`masa_max_sensor`).
 
 ```bash
 pip install -e ".[dev]"            # numpy, scipy ≥ 1.12, pandas, pyyaml, matplotlib, pytest
-pip install -e ".[openrocket]"     # script 1: orlab + JPype
+pip install -e ".[openrocket]"     # scripts 02 y 05: orlab + JPype
 python -m orlab fetch 24.12        # jar verificado por sha256 (o ORLAB_JAR=/ruta/OpenRocket-24.12.jar)
 ```
 
-El script 1 requiere JDK 17 o 21. Los resultados son deterministas: con el mismo YAML y
+Los scripts 02 y 05 (validación) requieren JDK 17 o 21; los scripts 01, 03 y 04 no. Los resultados son deterministas: con el mismo YAML y
 OpenRocket 24.12 se obtienen los mismos números.
 
 ## Uso
 
 ```bash
-python scripts/01_orlab_export.py                # OpenRocket → data/or_*.csv
-python scripts/02_volumen_lastre.py              # lastre, SM, trim, ranking y figuras
-python scripts/02_volumen_lastre.py --sin-orlab  # sin OpenRocket: perfil analítico + Barrowman interno
-python scripts/01_orlab_export.py --regresion    # verifica la base contra los valores de referencia
+python scripts/01_volumen_lastre.py             # barrido con el modelo propio: ranking y dibujos
+python scripts/02_validar_openrocket.py         # valida los ganadores con OpenRocket
+python scripts/02_validar_openrocket.py --regresion   # la base contra los valores de referencia
 pytest
 ```
 
-Opciones comunes: `--config` (otro YAML), `--solo id1,id2`, `--rellenos plomo_macizo`,
-`--sin-figuras`, `--dir-datos`, `--dir-figuras` y `--guardar-ork` (script 1, guarda cada variante
-como `.ork`).
+Opciones del script 01: `--config`, `--solo id1,id2`, `--rellenos plomo_macizo`, `--sin-figuras`,
+`--sin-dibujos`, `--figuras-detalle` (perfil y curvas CG/SM de cada configuración; lento),
+`--dir-datos`, `--dir-figuras` y `--con-orlab` (analiza todo con los or_*.csv de una exportación
+completa). Opciones del script 02: `--n-verif N`, `--guardar-ork` (guarda cada variante validada
+como `.ork`) y `--todos [--solo ...]`, que exporta **todas** las configuraciones a or_*.csv, como
+el flujo anterior; es lento y solo hace falta para comparar el barrido completo.
 
 **Comparación de largo y diámetro.** `config/config_barrido_LD.yaml` barre el largo del cuerpo y
 el diámetro con nariz y cola de longitud fija. Así cambia solo el tubo, y los radios coinciden en
 las uniones.
 
 ```bash
-python scripts/01_orlab_export.py  --config config/config_barrido_LD.yaml
-python scripts/02_volumen_lastre.py --config config/config_barrido_LD.yaml
-python scripts/03_comparar_LD.py    --config config/config_barrido_LD.yaml
+python scripts/01_volumen_lastre.py     --config config/config_barrido_LD.yaml
+python scripts/02_validar_openrocket.py --config config/config_barrido_LD.yaml   # un ganador por par
+python scripts/03_comparar_LD.py        --config config/config_barrido_LD.yaml
 ```
 
-El script 3 resume cada par (L, D): la mejor configuración de aletas, cuántas variantes son
-factibles, la caja mínima acostada ($L_{tot}\,D_{ac}^2$) y los kg de lastre por litro de caja.
-Sirve para elegir el par con el que se corre el barrido fino.
+El script 03 resume cada par (L, D): la mejor configuración de aletas, cuántas variantes son
+factibles, la caja mínima acostada ($L_{tot}\,D_{ac}^2$), los kg de lastre por litro de caja y,
+si se corrió la validación (`agrupar_por: [L_mm, D_mm]` en ese YAML), el ganador de OpenRocket
+de cada par. Sirve para elegir el par con el que se corre el barrido fino.
 
 ## Optimización de la geometría (`sensor_opt`)
 
@@ -129,17 +145,17 @@ de la base) con posición, cuerdas, flecha y altura variables. Se barren $D$, la
 $L_t/D$, $k$ y cinco parámetros de aleta ($\lambda_{LE}$, $\mu$, $r_{tip}/R$, $\gamma$, $\sigma$).
 
 ```bash
-python scripts/03_optimizar_malla.py --config config/optimizacion.yaml [--forzar] [--sin-refinamiento]
-python scripts/04_verificar_openrocket.py --config config/optimizacion.yaml
+python scripts/04_optimizar_malla.py --config config/optimizacion.yaml [--forzar] [--sin-refinamiento]
+python scripts/05_verificar_openrocket.py --config config/optimizacion.yaml
 ```
 
-- **Script 3 (sin JVM).** Expande la malla (≈ 3.2·10⁵ candidatos con la configuración por
+- **Script 04 (sin JVM).** Expande la malla (≈ 3.2·10⁵ candidatos con la configuración por
   defecto, unos 6 min en 4 núcleos), calcula una vez por cuerpo el perfil, la cavidad, las masas
   del casco y el CP de nariz y cola, y por cada aleta su polígono, su masa, su $C_{N\alpha}$
   (Barrowman interno como **CP sustituto**), el llenado de lastre y $J$. Ordena, marca el frente
   de Pareto en $(f_2, f_3, f_4)$ entre los que alcanzan $m_{max}$ y refina a medio paso alrededor
   de los `top_K`.
-- **Script 4 (OpenRocket).** Verifica los `N_verif` mejores y una muestra de `N_cal` estratificada
+- **Script 05 (OpenRocket).** Verifica los `N_verif` mejores y una muestra de `N_cal` estratificada
   por $(D, k)$, ajusta $x_{CP}^{OR} \approx \alpha + \beta\,x_{CP}^{sust}$ y, si el residuo supera
   `tol_cp_mm`, recalcula la malla con el CP calibrado y verifica los nuevos mejores. El ganador es
   el mejor $J$ **entre los verificados**, con el SM calculado con el CP de OpenRocket.
@@ -191,6 +207,7 @@ Es la única fuente de parámetros. Unidades: mm, g, kg/m³ y grados.
 | `remolque` | posición del amarre (`en_CG`, absoluta o relativa), $\alpha_{max}$ y límite lineal |
 | `envolvente` | largo y alto de la bahía (`null` = sin límite) y rotación de guardado |
 | `barrido`, `configuraciones` | parámetros a barrer (cualquier ruta del YAML) y casos explícitos |
+| `validacion_or` | cuántos ganadores valida el script 02 por grupo (`N_verif`), cómo se agrupan (`agrupar_por`) y cuántas rondas extra (`max_iter`) |
 | `openrocket` | `.ork` base, jar y nombres de componentes |
 | `verificacion`, `numerico`, `salida` | tolerancias, discretización y carpetas de salida |
 
@@ -209,29 +226,31 @@ Es la única fuente de parámetros. Unidades: mm, g, kg/m³ y grados.
 
 | Archivo | Contenido |
 |---|---|
-| `or_resumen.csv` | script 1: geometría aplicada, CP, $C_{N\alpha}$, CD, masa y CG en vacío, advertencias, versiones y sha256 |
-| `or_componentes.csv` | $C_{N\alpha}$, CP, masa y CG por componente |
-| `or_aletas.csv` | polígono de aleta tal como lo aceptó OpenRocket |
-| `or_perfiles.csv` | radio exterior $r_e(x)$ muestreado |
-| `resultados.csv` | una fila por configuración × relleno. Sufijo `_geo` = límite geométrico; sin sufijo = óptimo con SM ≥ SM_min |
-| `optimo.csv` | ranking por masa total del sensor entre las configuraciones factibles |
+| `resultados.csv` | script 01: una fila por configuración × relleno (modelo propio). Sufijo `_geo` = límite geométrico; sin sufijo = óptimo con SM ≥ SM_min; `ell_delantero_mm` = largo real del tapón delantero |
+| `optimo.csv` | script 01: ranking interno por masa total del sensor entre las configuraciones factibles |
 | `configuraciones.csv` | dimensiones por configuración: L total, D acostado, D parado, sección en vuelo, aleta, x_CP y ruta del dibujo |
 | `presupuestos.csv` | para cada masa objetivo: longitudes de tapón, `no_cabe`, CG, SM, trim y costo |
 | `ventanas.csv` | todos los intervalos de ℓ que cumplen el SM |
 | `masas_capas.csv`, `curvas/` | masa por capa y curvas ℓ → CG, SM y trim |
-| `comparacion_LD*.csv` | script 3: resumen por par (L, D) y tabla L × D de masa máxima |
+| `validacion_or.csv` | script 02: por configuración validada, masa, SM, CP y límite con el modelo propio y con OpenRocket, y cuál ganó |
+| `ganadores.csv` | script 02: el ganador de cada grupo, con todas las columnas de `resultados.csv` calculadas con OpenRocket |
+| `resultados_or.csv` | script 02: las filas de las configuraciones validadas, recalculadas con OpenRocket |
+| `or_resumen.csv`, `or_componentes.csv`, `or_aletas.csv`, `or_perfiles.csv` | script 02: exportación de OpenRocket (geometría aplicada, CP y $C_{N\alpha}$ total y por componente, masas, polígono de aleta, perfil, advertencias, versiones y sha256) de las validadas; con `--todos`, de todas |
+| `comparacion_LD*.csv` | script 03: resumen por par (L, D), con el ganador de OpenRocket si se validó, y tabla L × D de masa máxima |
 
 **Figuras (`figs/`):**
 
-- `dibujo__*`: dibujo acotado de cada configuración. La vista lateral muestra el cuerpo, las
+- `dibujo__*` (script 01): dibujo acotado de cada configuración con el modelo propio. La vista lateral muestra el cuerpo, las
   aletas, el lastre y la electrónica del óptimo, el CG y el CP. La vista frontal muestra la
   posición de guardado con D acostado y D parado. El relleno dibujado se elige en
   `salida.relleno_dibujo`.
-- `perfil__*`: perfil, capas de pared, polígono de aleta, lastre útil, electrónica y x_CP.
-- `cg_sm__*`: $x_{CG}(\ell)$ y $SM(\ell)$.
+- `ganador_or__*`, `ganador_or_perfil__*` (script 02): dibujo y perfil de cada ganador con los
+  datos de OpenRocket.
+- `perfil__*`, `cg_sm__*` (script 01 con `--figuras-detalle`): perfil con capas, aleta, lastre,
+  electrónica y x_CP; $x_{CG}(\ell)$ y $SM(\ell)$.
 - `masa_max__*`, `masa_SM_min__*`, `sm_max__*`, `sm_inf__*`: curvas de diseño frente a los
   parámetros del barrido.
-- `comparacion_LD__*` (script 3): mapa L × D de masa máxima y dispersión de masa frente a D acostado.
+- `comparacion_LD__*` (script 03): mapa L × D de masa máxima y dispersión de masa frente a D acostado.
 
 **Dimensiones de guardado.** El sensor se guarda acostado con las aletas en diagonal
 (`envolvente.rotacion_guardado_deg` = 45°), sin importar la rotación con la que vuela:
@@ -267,10 +286,10 @@ material, sin mecanizado, moldes ni envío.
 
 ## Verificación
 
-- `01_orlab_export.py --regresion` compara la base con los valores de referencia de
+- `02_validar_openrocket.py --regresion` compara la base con los valores de referencia de
   `verificacion.regresion_or` (masa, CG, CP y estabilidad a M = 0.3).
-- En cada corrida se contrastan las masas por componente y el CP de OpenRocket con el modelo
-  interno (`dif_masa_or_pct`, `dx_CP_or_vs_interno_mm`).
+- En cada validación se contrastan el CP, la masa y el SM de OpenRocket con el modelo propio
+  (`validacion_or.csv`: `dx_CP_mm`, `dif_masa_or_pct`, SM y masa de ambos).
 - Los tests (`pytest`) cubren casos analíticos (cilindros, conos, integrales), la geometría de
   las transiciones y las aletas, la validación del YAML, el modelo de CG, SM y trim, los esquemas
   de salida y la integración con OpenRocket. Estos últimos se saltan si no hay `java` ni jar.
@@ -294,8 +313,8 @@ material, sin mecanizado, moldes ni envío.
 ```
 config/     config.yaml (base), config_barrido_LD.yaml (largo × diámetro) y optimizacion.yaml (sensor_opt)
 modelos/    analisis_vol_int.ork (geometría de referencia, OpenRocket 24.12)
-scripts/    01_orlab_export.py, 02_volumen_lastre.py, 03_comparar_LD.py,
-            03_optimizar_malla.py, 04_verificar_openrocket.py
+scripts/    01_volumen_lastre.py, 02_validar_openrocket.py, 03_comparar_LD.py,
+            04_optimizar_malla.py, 05_verificar_openrocket.py
 src/sensor_lastre/
   config.py        carga y validación del YAML, barrido
   perfiles.py      funciones de forma de nariz y transición (OpenRocket)

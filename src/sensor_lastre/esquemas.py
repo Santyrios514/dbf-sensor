@@ -59,3 +59,12 @@ VENTANAS = ["config_id", "relleno", "desde_mm", "hasta_mm"]
 BANDERAS = ("inviable_geo", "SM_inalcanzable", "SM_inalcanzable_por_geometria", "margen_SM_bajo",
             "no_unimodal", "inestable_respecto_remolque", "trim_no_lineal", "dif_CP_alta", "dif_masa_alta",
             "SM_inalcanzable_con_masa_max")
+
+# Validación con OpenRocket de los ganadores (script 02): interno frente a OpenRocket.
+VALIDACION_OR = ["grupo", "config_id", "relleno", "puesto_interno", "estado_or", "ganador",
+                 "m_total_int_g", "m_total_or_g", "m_relleno_int_g", "m_relleno_or_g", "SM_int_cal", "SM_or_cal",
+                 "x_CP_int_mm", "x_CP_or_mm", "dx_CP_mm", "limitante_int", "limitante_or", "dif_masa_or_pct",
+                 "banderas_or", "or_warnings"]
+
+# Ganador validado por grupo: las columnas de RESULTADOS (calculadas con OpenRocket) van detrás.
+GANADORES = ["grupo", "n_validados"]

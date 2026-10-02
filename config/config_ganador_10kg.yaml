@@ -6,7 +6,7 @@ unidades:
   masa: g
   densidad: kg/m3
 materiales:
-  MAT_PARED_EQ: 1342
+  MAT_PARED_EQ: 1200
   PLA: 1240
   PETG: 1270
   ABS: 1050

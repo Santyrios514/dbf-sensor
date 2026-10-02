@@ -6,7 +6,7 @@
 unidades: {longitud: mm, masa: g, densidad: kg/m3}
 
 materiales:                     # densidad en kg/m^3
-  MAT_PARED_EQ: 1342            # tal como está en el .ork (pared bicapa equivalente)
+  MAT_PARED_EQ: 1200            # tal como está en el .ork (pared bicapa equivalente)
   PLA: 1240
   PETG: 1270
   ABS: 1050

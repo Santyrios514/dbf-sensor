@@ -13,6 +13,7 @@ from dataclasses import dataclass, field, replace
 from pathlib import Path
 from typing import Any
 
+import numpy as np
 import yaml
 
 from . import aletas as mod_aletas
@@ -100,10 +101,18 @@ class Mamparo:
 class Electronica:
     Le: float
     me: float
-    modo: str  # detras_del_lastre | fija
+    modo: str  # detras_del_lastre | fija (junta_cola se resuelve a fija con x_inicio = x_cola + desfase)
     x_inicio: float | None
     holgura: float
     x_cg_rel: float | None
+    D_cav: tuple[float, float] | None = None  # cono de la cavidad (D al inicio, D al final), recortado por la pared
+    junta_cola: bool = False  # x_inicio viene de la junta cuerpo–cola (modo junta_cola del YAML)
+
+    def r_cavidad(self, x):
+        """Radio de la cavidad de electrónica en x (interpolación lineal entre sus extremos)."""
+        d0, d1 = self.D_cav
+        t = (np.asarray(x, dtype=float) - self.x_inicio) / self.Le
+        return 0.5 * (d0 + (d1 - d0) * t)
 
     def x_cg(self, x_e):
         return x_e + (self.x_cg_rel if self.x_cg_rel is not None else self.Le / 2.0)
@@ -461,17 +470,28 @@ def _resolver_caso(cid: str, L_mm: float, D_mm: float, sec: dict, rellenos, erro
     # --- electrónica
     el = sec["electronica"]
     modo_e = el.get("modo")
-    if modo_e not in ("detras_del_lastre", "fija"):
-        errores.append(f"electronica.modo '{modo_e}' no válido (detras_del_lastre | fija)")
+    if modo_e not in ("detras_del_lastre", "fija", "junta_cola"):
+        errores.append(f"electronica.modo '{modo_e}' no válido (detras_del_lastre | fija | junta_cola)")
     x_ini_e = el.get("x_inicio_mm")
     if modo_e == "fija" and x_ini_e is None:
         errores.append("electronica.x_inicio_mm es obligatorio con modo 'fija'")
+    x_inicio_e = None if x_ini_e is None else float(x_ini_e) * MM
+    if modo_e == "junta_cola":
+        # la cavidad se ancla al final del cuerpo cilíndrico: empieza `desfase_junta_mm` respecto a x_cola
+        x_inicio_e = geom.x_cola + float(el.get("desfase_junta_mm", 0.0)) * MM
+    cav_e = el.get("cavidad")
+    D_cav = None
+    if cav_e is not None:
+        D_cav = (float(cav_e["D_inicio_mm"]) * MM, float(cav_e["D_fin_mm"]) * MM)
+        if not min(D_cav) > 0:
+            errores.append("electronica.cavidad: los diámetros deben ser > 0")
     xcg_rel = el.get("x_cg_relativo_mm")
     electronica = Electronica(
-        Le=float(el["longitud_mm"]) * MM, me=float(el["masa_g"]) * G, modo=modo_e,
-        x_inicio=None if x_ini_e is None else float(x_ini_e) * MM,
+        Le=float(el["longitud_mm"]) * MM, me=float(el["masa_g"]) * G,
+        modo="fija" if modo_e == "junta_cola" else modo_e, x_inicio=x_inicio_e,
         holgura=float(el.get("holgura_mm", 0.0)) * MM,
         x_cg_rel=None if xcg_rel is None else float(xcg_rel) * MM,
+        D_cav=D_cav, junta_cola=modo_e == "junta_cola",
     )
 
     puntuales = tuple(
@@ -504,8 +524,9 @@ def _resolver_caso(cid: str, L_mm: float, D_mm: float, sec: dict, rellenos, erro
     )
     if lastre.m_sensor_max is not None and not lastre.m_sensor_max > 0:
         errores.append("lastre.masa_max_sensor_g debe ser > 0 o null")
-    if lastre.trasero and electronica.modo != "detras_del_lastre":
-        errores.append("lastre.lastre_trasero requiere electronica.modo = detras_del_lastre")
+    if lastre.trasero and electronica.modo == "fija" and electronica.x_inicio is not None \
+            and electronica.x_inicio + electronica.Le >= L:
+        errores.append("lastre.lastre_trasero: la electrónica fija no deja espacio detrás")
 
     # --- estabilidad
     es = sec["estabilidad"]

@@ -79,12 +79,15 @@ pared:                          # capas de AFUERA hacia ADENTRO (ρ_eq = 1342 kg
 mamparos: []                    # posición del borde delantero; ejemplo:
   # - {x: {modo: relativo_L, valor: 0.5}, espesor_mm: 3.0, material: PLA}
 
-electronica:                    # PENDIENTE (§10.1)
-  longitud_mm: 100
+electronica:                    # cavidad en la junta cuerpo–cola (diseño 2026-10); toda la electrónica va ahí
+  longitud_mm: 20
   masa_g: 150
-  modo: detras_del_lastre       # detras_del_lastre | fija
+  modo: junta_cola              # detras_del_lastre | fija | junta_cola
   x_inicio_mm: null             # solo si modo = fija
-  holgura_mm: 2.0
+  desfase_junta_mm: -10         # junta_cola: inicio respecto al fin del cuerpo (−10 → 10 mm antes, 10 mm en la cola)
+  cavidad: {D_inicio_mm: 60, D_fin_mm: 550}  # cono del CAD; la cavidad es su intersección con el interior
+  # (en todo el tramo [x_e, x_e + L] no va plomo; si la pared recorta el cono → bandera informativa)
+  holgura_mm: 0.0
   x_cg_relativo_mm: null        # CG propio medido desde x_e; null = centro
 
 masas_puntuales:                # PENDIENTE (§10.2): herraje de remolque
@@ -94,20 +97,14 @@ lastre:
   x_inicio: auto                # auto | {modo: absoluto_mm, valor: ...}
   r_min_util_mm: 3.0
   factor_llenado: 1.0
-  fraccion_max_L: 0.6           # null = sin límite
+  fraccion_max_L: null          # null = sin límite (el plomo llega hasta la cavidad de electrónica)
   permitir_en_cola: false
   margen_cola_mm: 5.0
   zonas_prohibidas: []          # [{desde_mm:..., hasta_mm:...}]
-  lastre_trasero: true          # segundo tapón detrás de la electrónica (cola); se llena hasta SM = SM_min
+  lastre_trasero: true          # segundo tapón detrás de la cavidad de electrónica (cola); hasta SM = SM_min
   margen_popa_mm: 0.0           # hueco libre al final de la cavidad para el tapón trasero
-  masa_max_sensor_g: 6200       # tope de masa TOTAL del sensor (null = sin tope). Presupuesto con
-  # MTOW = 16 kg (estimado, ajustar con el peso real del avión):
-  #   estructura (ala, fuselaje, empenaje) 4.5 kg · tren de aterrizaje 0.6 kg
-  #   propulsión (motor, ESC, hélice) 1.2 kg · batería de propulsión 0.8 kg
-  #   aviónica, servos, cableado y batería RX 0.5 kg · sistema de despliegue (winch, cable,
-  #   compuerta, bahía) 1.2 kg → vacío 8.8 kg (55 % del MTOW)
-  #   margen de crecimiento de peso 1.0 kg (≈ 11 % del vacío)
-  #   sensor máx. = 16 − 8.8 − 1.0 = 6.2 kg (casco, aletas, electrónica, herraje y lastre)
+  masa_max_sensor_g: 9500       # tope de masa TOTAL del sensor (null = sin tope): casco, aletas,
+  # electrónica, herraje y lastre
 
 optimizacion:                   # criterio: máxima masa de lastre con SM ≥ SM_min
   exigir: [cabe_alto, cabe_ancho]   # banderas de envolvente que deben ser verdaderas (null = sin dato → no filtra)

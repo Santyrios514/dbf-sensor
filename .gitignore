@@ -229,3 +229,4 @@ resultados_*.zip
 # --- sensor_opt ---
 data_opt*/
 figs_opt*/
+tests/_config_tests.yaml

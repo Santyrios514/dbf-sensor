@@ -14,7 +14,7 @@ from .aletas import envolvente
 from .barrowman import ResultadoCP, cp_interno
 from .config import Caso
 from .esquemas import CURVA
-from .estabilidad import (LimiteGeo, ModeloLastre, Ventana, alpha_trim, limite_geometrico,
+from .estabilidad import (LimiteGeo, ModeloLastre, Ventana, alpha_trim, cabe_cavidad_electronica, limite_geometrico,
                           ventana_SM, x_inicio_lastre)
 from .geometria import Cavidad, construir_cavidad, malla, perfil_desde_muestras
 from .masas import MasaVacia, masa_vacia, masas_por_componente
@@ -166,6 +166,8 @@ def analizar_caso(caso: Caso, rellenos: list[Relleno] | None = None,
     lim = limite_geometrico(caso, cav, x_b0)
     if not lim.ell_geo > 0:
         banderas.append("inviable_geo")
+    if cabe_cavidad_electronica(caso, cav) is False:
+        banderas.append("cavidad_electronica_recortada")  # informativa: la pared recorta el cono
 
     res = ResultadoCaso(caso=caso, cav=cav, mv=mv, cp_int=cp_int, x_CP=x_CP, CNa=CNa,
                         x_CP_fuente=fuente, x_b0=x_b0, lim=lim, banderas=banderas,

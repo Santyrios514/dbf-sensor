@@ -98,7 +98,7 @@ def test_perfil_nariz_vs_openrocket(puente, forma, p):
 def export(tmp_path_factory):
     d = tmp_path_factory.mktemp("or")
     r = subprocess.run([sys.executable, str(RAIZ / "scripts" / "02_validar_openrocket.py"), "--todos",
-                        "--solo", "base_ork,L350_D65_h_tip30_extension20_rotacion_deg0,L350_D65_h_tip40_extension0_rotacion_deg0",
+                        "--config", str(CONFIG), "--solo", "base_ork,L350_D65_h_tip30_extension20_rotacion_deg0,L350_D65_h_tip40_extension0_rotacion_deg0",
                         "--dir-datos", str(d)], capture_output=True, text=True, timeout=600)
     assert r.returncode == 0, r.stdout + r.stderr
     return d

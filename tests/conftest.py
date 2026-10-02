@@ -7,8 +7,32 @@ import pytest
 import yaml
 
 RAIZ = Path(__file__).resolve().parents[1]
-CONFIG = RAIZ / "config" / "config.yaml"
+CONFIG_REPO = RAIZ / "config" / "config.yaml"
 ORK = RAIZ / "modelos" / "analisis_vol_int.ork"
+
+
+ELECTRONICA_DETRAS = {"longitud_mm": 100, "masa_g": 150, "modo": "detras_del_lastre", "x_inicio_mm": None,
+                      "holgura_mm": 2.0, "x_cg_relativo_mm": None}
+
+
+def _config_tests() -> Path:
+    """config.yaml con los valores con que se escribieron los tests del flujo principal.
+
+    Los tests comprueban el código, no el diseño vigente: se fijan la electrónica detrás del lastre
+    (100 mm), el presupuesto de 6.2 kg, la fracción máxima de 0.6 L y la densidad de pared del
+    `.ork` base (la verificación contra el `.ork` la compara). El archivo vive en tests/ para que
+    las rutas relativas del config se resuelvan igual que desde config/.
+    """
+    raw = yaml.safe_load(CONFIG_REPO.read_text(encoding="utf-8"))
+    raw["electronica"] = dict(ELECTRONICA_DETRAS)
+    raw["lastre"].update({"fraccion_max_L": 0.6, "masa_max_sensor_g": 6200})
+    raw["materiales"]["MAT_PARED_EQ"] = 1342  # valor del .ork base
+    ruta = RAIZ / "tests" / "_config_tests.yaml"
+    ruta.write_text(yaml.safe_dump(raw, allow_unicode=True, sort_keys=False), encoding="utf-8")
+    return ruta
+
+
+CONFIG = _config_tests()
 
 
 @pytest.fixture

@@ -26,6 +26,21 @@ def x_inicio_lastre(caso: Caso, cav: Cavidad) -> float:
     return float(cav.x[idx[0]]) if idx.size else math.nan
 
 
+def cabe_cavidad_electronica(caso: Caso, cav: Cavidad, tol: float = 1e-9) -> bool | None:
+    """¿El cono de la cavidad de electrónica queda dentro de la pared (r_i ≥ r_cavidad en todo su
+    largo)? La cavidad real es la intersección del cono con el interior, así que un False solo
+    indica que la pared la recorta (es informativo). None si no hay cavidad declarada."""
+    el = caso.electronica
+    if el.D_cav is None or el.x_inicio is None:
+        return None
+    x0, x1 = el.x_inicio, el.x_inicio + el.Le
+    if x0 < 0 or x1 > cav.x_fin_cavidad + tol:
+        return False
+    m = (cav.x > x0) & (cav.x < x1)
+    xs = np.r_[x0, cav.x[m], x1]
+    return bool(np.all(np.interp(xs, cav.x, cav.r_i) >= el.r_cavidad(xs) - tol))
+
+
 @dataclass(frozen=True)
 class LimiteGeo:
     ell_geo: float

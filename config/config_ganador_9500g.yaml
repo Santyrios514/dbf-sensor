@@ -1,0 +1,209 @@
+# Generado por scripts/06_ganador_a_config.py desde /home/user/dbf-sensor/data_opt_9500g/ranking.csv
+# Candidato: D70_ogiva_Lt2_k0.35_l0.4_m1_r2.2_g0.7_s1
+# Geometría del ganador de la optimización; el resto hereda config/config.yaml.
+unidades:
+  longitud: mm
+  masa: g
+  densidad: kg/m3
+materiales:
+  MAT_PARED_EQ: 1200
+  PLA: 1240
+  PETG: 1270
+  ABS: 1050
+  PA12: 1010
+  fibra_vidrio_epoxy: 1850
+  fibra_carbono_epoxy: 1550
+  balsa: 160
+  contrachapado_abedul: 680
+  epoxy: 1150
+  plomo: 11340
+  tungsteno_puro: 19250
+  tungsteno_aleacion_W90: 17000
+  bismuto: 9780
+  acero: 7850
+  laton: 8500
+  onyx: 1200
+costos_usd_kg:
+  plomo: 4
+  tungsteno_aleacion_W90: 150
+  tungsteno_puro: 120
+  bismuto: 25
+  acero: 3
+  laton: 10
+  epoxy: 30
+rellenos:
+- nombre: plomo_macizo
+  material: plomo
+geometria_base:
+  longitud_referencia: cuerpo
+  nariz:
+    forma: elipsoide
+    parametro: null
+    longitud:
+      modo: relativo_D
+      valor: 1.0
+  cuerpo:
+    longitud: auto
+  cola:
+    forma: ogiva
+    parametro: null
+    recortada: true
+    longitud:
+      modo: absoluto_mm
+      valor: 140.0
+    diametro_popa:
+      modo: absoluto_mm
+      valor: 24.5
+    popa: abierta
+    mamparo_popa:
+      espesor_mm: 2.0
+      material: PLA
+  aletas:
+    tipo: freeform_cola
+    n: 4
+    rotacion_deg: 45.0
+    c_r:
+      modo: absoluto_mm
+      valor: 84.0
+    x_tip_le:
+      modo: absoluto_mm
+      valor: 25.2
+    h_tip:
+      modo: absoluto_mm
+      valor: 45.5607
+    extension:
+      modo: absoluto_mm
+      valor: 0.0
+    r_interior_mm: 0.0
+    offset_bottom_mm: 0.0
+    epsilon_mm: 0.0
+    espesor_mm: 2.0
+    material: onyx
+    fraccion_solida: 1.0
+pared:
+  por_defecto:
+  - material: fibra_vidrio_epoxy
+    espesor_mm: 0.3
+    fraccion_solida: 1.0
+  - material: PLA
+    espesor_mm: 1.5
+    fraccion_solida: 1.0
+  nariz: null
+  cuerpo: null
+  cola: null
+mamparos: []
+electronica:
+  longitud_mm: 20
+  masa_g: 150
+  modo: junta_cola
+  x_inicio_mm: null
+  desfase_junta_mm: -10
+  cavidad:
+    D_inicio_mm: 60
+    D_fin_mm: 550
+  holgura_mm: 0.0
+  x_cg_relativo_mm: null
+masas_puntuales:
+- nombre: herraje_remolque
+  masa_g: 15
+  x:
+    modo: absoluto_mm
+    valor: 40
+lastre:
+  x_inicio: auto
+  r_min_util_mm: 3.0
+  factor_llenado: 1.0
+  fraccion_max_L: null
+  permitir_en_cola: false
+  margen_cola_mm: 5.0
+  zonas_prohibidas: []
+  lastre_trasero: true
+  margen_popa_mm: 0.0
+  masa_max_sensor_g: 9500.0
+optimizacion:
+  exigir:
+  - cabe_alto
+  - cabe_ancho
+estabilidad:
+  SM_min_cal: 1.0
+  SM_max_cal: null
+  umbral_margen_bajo_cal: 0.3
+condiciones_vuelo:
+  V_m_s: 30.0
+  rho_aire: isa
+  altitud_m: 1495
+  aoa_deg: 0.0
+  mach: auto
+  mach_regresion_or: 0.3
+remolque:
+  x_T:
+    modo: en_CG
+  alpha_trim_max_deg: 5.0
+  alpha_lineal_max_deg: 15.0
+  tol_amarre_min_mm: 1.5
+envolvente:
+  largo_max_mm: null
+  alto_max_mm: null
+  ancho_max_mm: null
+  rotacion_guardado_deg: 45
+presupuesto_masa:
+  lastre_g:
+  - 250
+  - 500
+  - 750
+  - 1000
+  - 1500
+barrido:
+  modo: cartesiano
+  parametros:
+    L_mm:
+    - 400.0
+    D_mm:
+    - 70.0
+configuraciones: {}
+validacion_or:
+  N_verif: 1
+  agrupar_por: []
+  max_iter: 3
+openrocket:
+  ork_base: /home/user/dbf-sensor/modelos/analisis_vol_int.ork
+  jar: null
+  nombres_componentes:
+    nariz: Ojiva
+    cuerpo: Cuerpo
+    cola: Transición
+    aletas: Aletas de forma libre
+  n_muestras_perfil: 800
+  cna_diferencias:
+    activar: true
+    delta_aoa_deg: 1.0
+verificacion:
+  dif_CP_max_frac_L: 0.05
+  dif_masa_or_max_frac: 0.03
+  dif_masa_aletas_max_frac: 0.02
+  tol_geometria_ork_mm: 0.001
+  regresion_or:
+    masa_g:
+      valor: 184
+      tol: 1
+    x_CG_mm:
+      valor: 202
+      tol: 1
+    x_CP_mm:
+      valor: 158
+      tol: 1
+    estabilidad_cal:
+      valor: -0.68
+      tol: 0.02
+numerico:
+  dx_mm: 0.1
+  n_barrido_ell: 600
+  tol_raiz_mm: 0.01
+  n_superficie_aleta: 200
+  n_franjas_aleta: 48
+  tol_superficie_aleta_mm: 0.01
+salida:
+  dir_datos: data_ganador_9500g
+  dir_figuras: figs_ganador_9500g
+  figuras: true
+  relleno_dibujo: plomo_macizo

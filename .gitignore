@@ -230,3 +230,5 @@ resultados_*.zip
 data_opt*/
 figs_opt*/
 tests/_config_tests.yaml
+data_ganador*/
+figs_ganador*/

@@ -348,7 +348,7 @@ def _analizar_relleno(res: ResultadoCaso, rel: Relleno) -> ResultadoRelleno:
                 banderas.append("trim_no_lineal")
             fila.update({
                 "V_util_cm3": Vu / CM3, "eta_int": Vu / V_int, "eta_ext": Vu / V_ext,
-                "m_relleno_g": rel.rho_b * Vu / G, "m_total_g": m_u / G,
+                "m_relleno_g": (rel.rho_b * Vu - mod.m_aloj) / G, "m_total_g": m_u / G,
                 "x_CG_mm": xcg_u / MM, "SM_cal": SM(xcg_u), "x_T_mm": x_T_de(xcg_u) / MM,
                 "alpha_trim_deg": alpha_u,
                 "x_T_trim_cero_mm": xcg_u / MM,
@@ -357,6 +357,7 @@ def _analizar_relleno(res: ResultadoCaso, rel: Relleno) -> ResultadoRelleno:
                 "ell_delantero_mm": ell_u / MM, "ell_trasero_mm": ell2 / MM,
                 "costo_relleno_usd": rel.rho_b * Vu * rel.costo_usd_kg,
                 "m_relleno_trasero_g": rel.rho_b * V2 / G, "limitante_masa": limitante,
+                "m_lastre_alojamiento_g": mod.m_aloj / G,
             })
         ells = np.linspace(0.0, ell_geo, nu.n_ell)
         xcg = mod.x_CG(ells)

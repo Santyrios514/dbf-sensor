@@ -55,7 +55,9 @@ NOMBRES = {"L": "L total", "L_n": "L_n nariz", "L_c": "L_c cuerpo cilíndrico", 
            "c_r": "c_r cuerda de raíz", "c_t": "c_t cuerda de punta", "x_s": "x_s flecha", "h": "h envergadura",
            "t_aleta": "t espesor de aleta", "plomo_delantero": "tapón de plomo delantero",
            "x_electronica": "x inicio de la cavidad de electrónica", "L_electronica": "largo de la cavidad",
-           "plomo_trasero": "tapón de plomo trasero", "SM_D": "brazo SM·D (CG → CP)"}
+           "plomo_trasero": "tapón de plomo trasero", "SM_D": "brazo SM·D (CG → CP)",
+           "x_herraje": "x herraje de remolque (= x_CG)", "d_alojamiento": "Ø alojamiento del herraje",
+           "L_alojamiento": "profundidad del alojamiento (pared → eje)"}
 
 
 @dataclass
@@ -184,6 +186,21 @@ def _vista_lateral(ax, det: Detalle, est: Estado | None, cot: _Cotas, Rmax: floa
         ax.text(est.x_e / MM + Le / 2, R * 0.5, "electrónica", rotation=90, ha="center", va="center", fontsize=5.5,
                 color=TINTA, zorder=6)  # en la mitad superior: el CP suele caer dentro de la cavidad
     for pm in caso.puntuales:
+        if pm.en_CG:  # herraje en el CG: alojamiento radial desde el eje hasta la pared superior
+            if est is None:
+                continue
+            xh, d = est.x_CG / MM, pm.d_aloj / MM
+            ri = float(np.interp(est.x_CG, cav.x, cav.r_i)) / MM
+            if d > 0:
+                ax.add_patch(Rectangle((xh - d / 2, 0), d, ri, fc="white", ec=TINTA, lw=0.5, zorder=5))
+            ax.add_patch(Rectangle((xh - 2, ri - 4), 4, 4, fc=TINTA, ec="none", zorder=6))
+            cot.valor("x_herraje", xh)
+            if d > 0:
+                cot.valor("d_alojamiento", d)
+                cot.valor("L_alojamiento", pm.V_aloj / (math.pi * pm.d_aloj**2 / 4) / MM)
+            ax.text(xh + max(d / 2, 2) + 1.5, ri * 0.55, f"{pm.nombre.replace('_', ' ')} (en el CG)",
+                    fontsize=5.5, ha="left", va="center", color=TINTA, zorder=6, bbox=dict(fc="white", ec="none", pad=0.2))
+            continue
         ax.add_patch(Rectangle((pm.x / MM - 2, -2), 4, 4, fc=TINTA, ec="none", zorder=6))
         ax.annotate(pm.nombre.replace("_", " "), (pm.x / MM, -2), xytext=(pm.x / MM, -R * 0.55),
                     fontsize=5.5, ha="center", color=TINTA, arrowprops=dict(arrowstyle="-", lw=0.4, color=TINTA2),
@@ -326,6 +343,18 @@ def _vista_posterior(ax, det: Detalle, cot: _Cotas, lim: float):
 
 
 # --------------------------------------------------------------------------- cajetín
+
+
+def _nota_herraje(caso) -> str:
+    hs = [p for p in caso.puntuales if p.en_CG]
+    if not hs:
+        return "7. Masas puntuales en su posición fija (ver cotas)."
+    p = hs[0]
+    t = f"7. {p.nombre.replace('_', ' ').capitalize()} en el CG (punto de remolque): {p.m / G:.0f} g"
+    if p.d_aloj > 0:
+        t += (f"; alojamiento Ø{p.d_aloj / MM:g} × {p.V_aloj / (math.pi * p.d_aloj**2 / 4) / MM:.1f} mm en el plomo, "
+              "descontado del lastre")
+    return t + "."
 
 
 def _filas_cajetin(fila: pd.Series, det: Detalle, est: Estado | None, puesto, val: dict | None,
@@ -482,6 +511,7 @@ def plano(cfg: ConfigOpt, fila: pd.Series, ruta_base: Path, puesto=None, validac
         "5. CG y CP del modelo propio; con validación, CP de OpenRocket (ver cajetín).",
         "6. H_ap: mínima altura de caja con el sensor acostado, girado a su mejor ángulo; incluye el espesor "
         "de las aletas, sin holgura.",
+        _nota_herraje(caso),
     ]
     for i, t in enumerate(notas):
         marco.text(MARCO_MM + 6.0, MARCO_MM + alto_caj - 4.0 - i * 5.0, t, fontsize=6.8 if i else 7.5,

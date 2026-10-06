@@ -19,7 +19,7 @@ def _config_tests() -> Path:
     """config.yaml con los valores con que se escribieron los tests del flujo principal.
 
     Los tests comprueban el código, no el diseño vigente: se fijan la electrónica detrás del lastre
-    (100 mm), el presupuesto de 6.2 kg, la fracción máxima de 0.6 L y la densidad de pared del
+    (100 mm), el herraje en x = 40 mm, el presupuesto de 6.2 kg, la fracción máxima de 0.6 L y la densidad de pared del
     `.ork` base (la verificación contra el `.ork` la compara). El archivo vive en tests/ para que
     las rutas relativas del config se resuelvan igual que desde config/.
     """
@@ -27,6 +27,8 @@ def _config_tests() -> Path:
     raw["electronica"] = dict(ELECTRONICA_DETRAS)
     raw["lastre"].update({"fraccion_max_L": 0.6, "masa_max_sensor_g": 6200})
     raw["materiales"]["MAT_PARED_EQ"] = 1342  # valor del .ork base
+    raw["masas_puntuales"] = [{"nombre": "herraje_remolque", "masa_g": 15,
+                               "x": {"modo": "absoluto_mm", "valor": 40}}]
     ruta = RAIZ / "tests" / "_config_tests.yaml"
     ruta.write_text(yaml.safe_dump(raw, allow_unicode=True, sort_keys=False), encoding="utf-8")
     return ruta

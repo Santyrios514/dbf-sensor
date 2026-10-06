@@ -48,8 +48,11 @@ def masas_del_llenado(det: Detalle) -> list[MasaOR]:
     rr, caso = Ll.rr, Ll.res.caso
     mod = rr.modelo
     out = []
+    x_cg = rr.fila["x_CG_mm"] * MM
     if Ll.m_delantero > 0 and Ll.ell > 0:
-        out.append(MasaOR("lastre_delantero", Ll.m_delantero, float(mod.xbar_b(Ll.ell))))
+        # el alojamiento del herraje se descuenta del tapón delantero en el CG (allí está el agujero)
+        M_del = mod.rho_b * float(mod.Phi1(Ll.ell)) - mod.m_aloj * x_cg
+        out.append(MasaOR("lastre_delantero", Ll.m_delantero, M_del / Ll.m_delantero))
     ell2 = (rr.fila.get("ell_trasero_mm") or 0.0) * MM
     if ell2 > 0:
         a = mod.x_r0(Ll.ell)
@@ -59,7 +62,7 @@ def masas_del_llenado(det: Detalle) -> list[MasaOR]:
     el = caso.electronica
     out.append(MasaOR("electronica", el.me, float(mod.xbar_e(Ll.ell))))
     for p in caso.puntuales:
-        out.append(MasaOR(p.nombre, p.m, p.x))
+        out.append(MasaOR(p.nombre, p.m, x_cg if p.en_CG else p.x))
     return out
 
 

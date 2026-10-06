@@ -79,7 +79,8 @@ def test_T5_masa_activa_lastre_contiguo_y_m_max(raw):
     assert L.ell > 0 and L.ell < cu.lim.ell_geo
     assert L.m_delantero == pytest.approx(f["m_relleno_g"] * G)
     V = L.rr.modelo.V_b(L.ell)  # el tapón empieza en x_b0 y ocupa [x_b0, x_b0 + ℓ]
-    assert L.rr.modelo.rho_b * V == pytest.approx(L.m_delantero, abs=0.1 * G)  # ℓ con tol_raiz_mm
+    # ℓ con tol_raiz_mm; el tapón se reporta neto del alojamiento del herraje (agujero en el CG)
+    assert L.rr.modelo.rho_b * V - L.rr.modelo.m_aloj == pytest.approx(L.m_delantero, abs=0.1 * G)
 
 
 def test_T5_SM_activo_da_SM_min(raw):

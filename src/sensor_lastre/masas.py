@@ -33,8 +33,10 @@ class MasaVacia:
     x_aletas: float = 0.0
     m_mamparos: float = 0.0
     M_mamparos: float = 0.0
-    m_puntuales: float = 0.0
-    M_puntuales: float = 0.0
+    m_puntuales: float = 0.0  # todas, también las que van en el CG
+    M_puntuales: float = 0.0  # solo las de posición fija
+    m_en_CG: float = 0.0  # masas puntuales ubicadas en el CG del sensor (no mueven el CG)
+    V_aloj: float = 0.0  # volumen de lastre desplazado por sus alojamientos (también en el CG)
 
     @property
     def m_casco(self) -> float:
@@ -96,5 +98,9 @@ def masa_vacia(caso: Caso, cav: Cavidad) -> MasaVacia:
         mv.M_mamparos += mp.rho * float(cav.mom_bruto(mp.x, mp.x + mp.e))
     for p in caso.puntuales:
         mv.m_puntuales += p.m
-        mv.M_puntuales += p.m * p.x
+        if p.en_CG:
+            mv.m_en_CG += p.m
+            mv.V_aloj += p.V_aloj
+        else:
+            mv.M_puntuales += p.m * p.x
     return mv

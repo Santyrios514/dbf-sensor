@@ -122,7 +122,10 @@ class Electronica:
 class MasaPuntual:
     nombre: str
     m: float
-    x: float
+    x: float  # NaN si en_CG
+    en_CG: bool = False  # se ubica en el CG del sensor (p. ej. el herraje de remolque con x_T en el CG)
+    V_aloj: float = 0.0  # volumen de lastre que desplaza su alojamiento [m³], centrado en su posición
+    d_aloj: float = 0.0  # diámetro del alojamiento [m] (solo para dibujarlo)
 
 
 @dataclass(frozen=True)
@@ -375,6 +378,30 @@ def _params_aleta(a: dict, L: float, D: float, Lt: float, mats: dict, errores: l
     )
 
 
+def _masa_puntual(i: int, mp: dict, D: float, L: float, pared, errores: list[str]) -> MasaPuntual:
+    """Masa puntual fija (x absoluto/relativo) o en el CG del sensor (`x: {modo: en_CG}`).
+
+    `alojamiento: {diametro_mm, largo_mm}` es el agujero que la pieza ocupa en el lastre (un cilindro
+    radial centrado en su posición); `largo_mm: auto` = radio interior del cuerpo cilíndrico (desde la
+    pared hasta el eje). Ese volumen se descuenta del lastre."""
+    donde = f"masas_puntuales[{i}]"
+    en_CG = isinstance(mp.get("x"), dict) and mp["x"].get("modo") == "en_CG"
+    x = math.nan if en_CG else _longitud(mp["x"], {"D": D, "L": L}, f"{donde}.x", errores)
+    V = d = 0.0
+    al = mp.get("alojamiento")
+    if al:
+        d = float(al["diametro_mm"]) * MM
+        largo = al.get("largo_mm", "auto")
+        lg = (D / 2 - espesor_total(pared["cuerpo"])) if largo in (None, "auto") else float(largo) * MM
+        if not (d > 0 and lg > 0):
+            errores.append(f"{donde}.alojamiento: diámetro y largo deben ser > 0")
+        V = math.pi * d**2 / 4 * lg
+        if not en_CG:
+            errores.append(f"{donde}.alojamiento: solo está soportado con x en_CG")
+    return MasaPuntual(nombre=mp.get("nombre", f"p{i}"), m=float(mp["masa_g"]) * G, x=x, en_CG=en_CG, V_aloj=V,
+                       d_aloj=d)
+
+
 def _resolver_caso(cid: str, L_mm: float, D_mm: float, sec: dict, rellenos, errores_glob,
                    valores_barrido: dict) -> Caso | None:
     errores: list[str] = []
@@ -494,11 +521,8 @@ def _resolver_caso(cid: str, L_mm: float, D_mm: float, sec: dict, rellenos, erro
         D_cav=D_cav, junta_cola=modo_e == "junta_cola",
     )
 
-    puntuales = tuple(
-        MasaPuntual(nombre=mp.get("nombre", f"p{i}"), m=float(mp["masa_g"]) * G,
-                    x=_longitud(mp["x"], {"D": D, "L": L}, f"masas_puntuales[{i}].x", errores))
-        for i, mp in enumerate(sec.get("masas_puntuales") or [])
-    )
+    puntuales = tuple(_masa_puntual(i, mp, D, L, pared, errores)
+                      for i, mp in enumerate(sec.get("masas_puntuales") or []))
 
     # --- lastre
     la = sec["lastre"]

@@ -90,8 +90,12 @@ electronica:                    # cavidad en la junta cuerpo–cola (diseño 202
   holgura_mm: 0.0
   x_cg_relativo_mm: null        # CG propio medido desde x_e; null = centro
 
-masas_puntuales:                # PENDIENTE (§10.2): herraje de remolque
-  - {nombre: herraje_remolque, masa_g: 15, x: {modo: absoluto_mm, valor: 40}}
+masas_puntuales:                # x: {modo: absoluto_mm | relativo_L, valor} o {modo: en_CG}
+  # Herraje de remolque (perno de ojo/grillete donde se engancha el cable). Va en el punto de remolque,
+  # que es el CG (remolque.x_T: en_CG): una masa en el CG no lo mueve, solo suma masa. Su alojamiento
+  # es un agujero radial en el plomo (largo auto = de la pared al eje) que se descuenta del lastre.
+  # PENDIENTE: masa y dimensiones de la pieza real (valores provisionales).
+  - {nombre: herraje_remolque, masa_g: 15, x: {modo: en_CG}, alojamiento: {diametro_mm: 10, largo_mm: auto}}
 
 lastre:
   x_inicio: auto                # auto | {modo: absoluto_mm, valor: ...}

@@ -126,13 +126,28 @@ class ModeloLastre:
     def xbar_e(self, ell):
         return self.caso.electronica.x_cg(self.x_e(ell))
 
+    @property
+    def m_aloj(self) -> float:
+        """Lastre que desplazan los alojamientos de las masas en el CG (herraje) [kg]."""
+        return self.rho_b * self.fll * self.mv.V_aloj
+
+    @property
+    def m_en_CG_neta(self) -> float:
+        """Masa neta ubicada en el CG: piezas en el CG menos el lastre que desplazan. Una masa en
+        el CG no lo mueve, x_CG = M/m con M y m sin ella, así que solo cuenta en la masa total."""
+        return self.mv.m_en_CG - self.m_aloj
+
     def m(self, ell):
-        return self.mv.m0 + self.m_b(ell) + self.caso.electronica.me
+        return self.mv.m0 + self.m_b(ell) + self.caso.electronica.me - self.m_aloj
+
+    def m_momento(self, ell):
+        """Masa sin las piezas en el CG ni sus alojamientos: la que fija la posición del CG."""
+        return self.m(ell) - self.m_en_CG_neta
 
     def x_CG(self, ell):
         me = self.caso.electronica.me
         num = self.mv.M0 + self.rho_b * self.Phi1(ell) + me * self.xbar_e(ell)
-        return num / self.m(ell)
+        return num / self.m_momento(ell)
 
     def dxCG_dell(self, ell):
         """Derivada analítica (sección 3.8)."""
@@ -140,7 +155,7 @@ class ModeloLastre:
         xb = self.x_b0 + ell
         A = self.cav.area(xb)
         num = self.rho_b * self.fll * A * (xb - self.x_CG(ell)) + self.caso.electronica.me * self.dxe_dell()
-        return num / self.m(ell)
+        return num / self.m_momento(ell)
 
     # --- tapón trasero: detrás de la electrónica, desde x_r0(ℓ) hacia popa
     def x_r0(self, ell) -> float:
@@ -160,7 +175,8 @@ class ModeloLastre:
     def x_CG_con_trasero(self, ell, ell2):
         a = self.x_r0(ell)
         M_tras = self.rho_b * self.fll * self.cav.mom(a, a + np.asarray(ell2, dtype=float))
-        return (self.x_CG(ell) * self.m(ell) + M_tras) / self.m_con_trasero(ell, ell2)
+        mm = self.m_momento(ell)
+        return (self.x_CG(ell) * mm + M_tras) / (mm + self.rho_b * self.V_tras(ell, ell2))
 
     def ell2_por_SM(self, ell, x_CP: float, D_ref: float, SM_min: float, tol: float) -> float:
         """Máximo ℓ_2 ∈ [0, ℓ_2,max] con SM ≥ SM_min. El tapón trasero está detrás del CG, así

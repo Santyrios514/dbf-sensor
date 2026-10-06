@@ -27,8 +27,8 @@ RESULTADOS = [
     "costo_relleno_usd", "ell_delantero_mm", "ell_trasero_mm", "limitante_masa", "m_total_g", "x_CG_mm", "SM_cal", "x_CP_mm",
     "x_CP_fuente", "dx_CP_or_vs_interno_mm", "CN_alpha_rad", "x_T_mm", "alpha_trim_geo_deg",
     "alpha_trim_deg", "x_T_trim_cero_mm", "tol_amarre_mm", "m_casco_g", "A_aleta_mm2", "m_aletas_g",
-    "x_CG_aletas_mm", "m_mamparos_g", "m_electronica_g", "m_puntuales_g", "dif_masa_or_pct",
-    "L_total_mm", "D_acostado_mm", "D_parado_mm", "h_env_mm", "w_env_mm", "cabe_largo", "cabe_alto", "cabe_ancho",
+    "x_CG_aletas_mm", "m_mamparos_g", "m_electronica_g", "m_puntuales_g", "m_lastre_alojamiento_g",
+    "dif_masa_or_pct", "L_total_mm", "D_acostado_mm", "D_parado_mm", "h_env_mm", "w_env_mm", "cabe_largo", "cabe_alto", "cabe_ancho",
     "banderas",
 ]
 

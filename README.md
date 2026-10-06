@@ -181,6 +181,30 @@ Salidas en `data_opt/`: `ranking.csv` (todos los candidatos, con `factible` y `m
 `ork/rank{NN}_{cand_id}.ork` con el lastre y la electrónica como *Mass components*. Figuras en
 `figs_opt/`: ganador (perfil y dibujo), Pareto, sensibilidad, calibración y motivos de descarte.
 
+### Planos de los ganadores
+
+```bash
+python scripts/07_planos.py --config config/optimizacion.yaml [--n 5] [--cand CAND_ID] [--dpi 300]
+```
+
+Dibuja, sin JVM, una hoja A3 apaisada por ganador (`planos/<salida.dir>/rankNN_<cand_id>.png` y
+`.pdf`). Los ganadores son los verificados y factibles con OpenRocket, ordenados por $J$ con el CP
+de OpenRocket; el lastre dibujado es el del llenado con ese CP. Cada hoja trae:
+
+- vista lateral en corte (pared por capas, tapones de plomo rayados, cavidad de electrónica,
+  herraje, aletas en verdadera magnitud, CG, CP y brazo SM·D) y vista posterior (aletas con su
+  rotación y círculo del D aparente);
+- cotas: L, L_n, L_c, L_t, D, d_popa, D_ap, Δx_LE (desde el inicio de la cola), x_s, c_t, c_r, h,
+  espesor de aleta, tapones de plomo y posición y largo de la cavidad; tabla de cotas con los
+  mismos textos;
+- escala normalizada (la mayor de 1:1, 1:1.5, 1:2, … que cabe), barra de escala, notas y cajetín
+  con masas, x_CG/x_CP, SM, tolerancia de amarre, cola (θ, fineza, f_b), flutter, restricción
+  activa y la línea de validación con OpenRocket.
+
+También escribe `rankNN_perfil.csv` (x, r_e, r_i cada 0.5 mm y el polígono de la aleta, para
+CAD/CFD) y `comparativo_top.png` (siluetas superpuestas). Los PNG y PDF no llevan fecha ni
+software en los metadatos: la misma entrada da los mismos bytes (`tests_opt/test_planos.py`).
+
 **Notas de diseño.**
 
 - **Espesor de aleta fijo en 2.0 mm.** Optimizado, quedaría siempre en el mínimo de la malla
@@ -329,7 +353,7 @@ material, sin mecanizado, moldes ni envío.
 config/     config.yaml (base), config_barrido_LD.yaml (largo × diámetro) y optimizacion.yaml (sensor_opt)
 modelos/    analisis_vol_int.ork (geometría de referencia, OpenRocket 24.12)
 scripts/    01_volumen_lastre.py, 02_validar_openrocket.py, 03_comparar_LD.py,
-            04_optimizar_malla.py, 05_verificar_openrocket.py
+            04_optimizar_malla.py, 05_verificar_openrocket.py, 06_ganador_a_config.py, 07_planos.py
 src/sensor_lastre/
   config.py        carga y validación del YAML, barrido
   perfiles.py      funciones de forma de nariz y transición (OpenRocket)
@@ -355,7 +379,8 @@ src/sensor_opt/
   barrido.py       caché por cuerpo, paralelo, ranking, refinamiento
   verificacion.py  OpenRocket (PuenteOpt, extensión del puente), calibración, .ork
   exportar.py      CSV, JSON y figuras
+  planos.py        planos A3 acotados de los ganadores (vista lateral, posterior, cajetín)
 tests/      pytest de sensor_lastre
-tests_opt/  pytest de sensor_opt (T1–T10 de la spec v3)
+tests_opt/  pytest de sensor_opt (T1–T10 de la spec v3 y planos)
 docs/       api_openrocket.md (API de OpenRocket) y mapa_reuso.md (qué reutiliza sensor_opt)
 ```

@@ -50,6 +50,7 @@ COL_RANKING = {"L_t": "L_t_mm", "D": "D_mm", "D_ap": "D_ap_mm", "c_r": "c_r_mm",
 
 NOMBRES = {"L": "L total", "L_n": "L_n nariz", "L_c": "L_c cuerpo cilíndrico", "L_t": "L_t cola",
            "D": "D cuerpo", "d_popa": "d_popa diámetro de popa", "D_ap": "D_ap aparente",
+           "H_ap": "H_ap altura aparente (caja mínima)", "W_caja": "ancho de la caja con H_ap",
            "x_LE": "x_LE borde de ataque (desde la punta)", "dx_LE": "Δx_LE desde el inicio de la cola",
            "c_r": "c_r cuerda de raíz", "c_t": "c_t cuerda de punta", "x_s": "x_s flecha", "h": "h envergadura",
            "t_aleta": "t espesor de aleta", "plomo_delantero": "tapón de plomo delantero",
@@ -251,6 +252,39 @@ def _vista_lateral(ax, det: Detalle, est: Estado | None, cot: _Cotas, Rmax: floa
     ax.text(52, yb_ + 1.1, "mm", ha="left", va="center", fontsize=FUENTE)
 
 
+def _puntas(r_tip: float, t: float, n: int, phi0: float) -> np.ndarray:
+    """Esquinas de las puntas de las n aletas (rectángulos de espesor t) en la sección transversal,
+    con φ medido desde la vertical: (x, y) = r_tip·(sin φ, cos φ) ± (t/2)·(cos φ, −sin φ)."""
+    phi = phi0 + 2 * np.pi * np.arange(n) / n
+    u = np.c_[np.sin(phi), np.cos(phi)]
+    nrm = np.c_[u[:, 1], -u[:, 0]]
+    return np.r_[r_tip * u + t / 2 * nrm, r_tip * u - t / 2 * nrm]
+
+
+def _alto_ancho(R: float, r_tip: float, t: float, n: int, phi0: float) -> tuple[float, float]:
+    P = _puntas(r_tip, t, n, phi0)
+    alto = max(R, P[:, 1].max()) + max(R, -P[:, 1].min())
+    ancho = max(R, P[:, 0].max()) + max(R, -P[:, 0].min())
+    return float(alto), float(ancho)
+
+
+def altura_aparente(R: float, r_tip: float, t: float, n: int, n_ang: int = 3601) -> tuple[float, float, float]:
+    """(H_ap, ancho, φ*): mínima altura de la caja que contiene la sección (cuerpo + aletas con su
+    espesor) con el sensor acostado, girándolo sobre su eje. Basta barrer φ en [0, 2π/n): el
+    conjunto de aletas se repite con ese periodo. Con 4 aletas φ* = 45° y H = √2 (r_tip + t/2)."""
+    from scipy.optimize import minimize_scalar
+    per = 2 * np.pi / n
+    phis = np.linspace(0.0, per, n_ang)
+    alts = np.array([_alto_ancho(R, r_tip, t, n, p)[0] for p in phis])
+    i = int(np.argmin(alts))
+    lo, hi = phis[max(i - 1, 0)], phis[min(i + 1, n_ang - 1)]
+    r = minimize_scalar(lambda p: _alto_ancho(R, r_tip, t, n, p)[0], bounds=(lo, hi), method="bounded",
+                        options={"xatol": 1e-10})
+    phi = float(r.x) if r.fun <= alts[i] else float(phis[i])
+    H, W = _alto_ancho(R, r_tip, t, n, phi)
+    return H, W, phi % per
+
+
 def _vista_posterior(ax, det: Detalle, cot: _Cotas, lim: float):
     caso = det.llenado.res.caso if det.llenado is not None else det.cu.caso
     g, a = caso.geom, caso.geom.aletas
@@ -276,6 +310,18 @@ def _vista_posterior(ax, det: Detalle, cot: _Cotas, lim: float):
             color=NARANJA)
     ax.text(0, -lim + 2, f"{pa.n} aletas a {math.degrees(pa.rotacion):g}° · t = {cot.valor('t_aleta', t)} · "
             f"r_tip = {r_tip:.1f}", ha="center", va="bottom", fontsize=FUENTE)
+    # altura aparente: caja mínima con el sensor acostado (aletas giradas a φ*)
+    H, W, phi = altura_aparente(R, r_tip, t, pa.n)
+    per = 2 * np.pi / pa.n
+    d = (phi - pa.rotacion) % per
+    if min(d, per - d) > 1e-6:  # la orientación de vuelo no es la de la caja: aletas fantasma a φ*
+        for q in _puntas(r_tip, t, pa.n, phi)[:pa.n]:
+            ax.plot([0, q[0]], [0, q[1]], color=AZUL, lw=0.5, ls=(0, (2, 2)))
+    ax.add_patch(Rectangle((-W / 2, -H / 2), W, H, fc="none", ec=AZUL, lw=0.8, ls=(0, (6, 2)), zorder=4))
+    cot.v("H_ap", -(lim - 5), -H / 2, H / 2, "H_ap", (-W / 2, -W / 2))
+    cot.valor("W_caja", W)
+    ax.text(0, H / 2 + 1.5, f"caja mínima (aletas a {math.degrees(phi):.0f}°)", ha="center", va="bottom",
+            fontsize=5.5, color=AZUL)
 
 
 # --------------------------------------------------------------------------- cajetín
@@ -433,6 +479,8 @@ def plano(cfg: ConfigOpt, fila: pd.Series, ruta_base: Path, puesto=None, validac
         f"de la cola." if a is not None else "3. Sin aletas.",
         f"4. Cavidad de electrónica de {el.Le / MM:g} mm en la junta cuerpo–cola{cav_txt}; sin plomo en ese tramo.",
         "5. CG y CP del modelo propio; con validación, CP de OpenRocket (ver cajetín).",
+        "6. H_ap: mínima altura de caja con el sensor acostado, girado a su mejor ángulo; incluye el espesor "
+        "de las aletas, sin holgura.",
     ]
     for i, t in enumerate(notas):
         marco.text(MARCO_MM + 6.0, MARCO_MM + alto_caj - 4.0 - i * 5.0, t, fontsize=6.8 if i else 7.5,

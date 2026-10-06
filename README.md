@@ -194,7 +194,8 @@ de OpenRocket; el lastre dibujado es el del llenado con ese CP. Cada hoja trae:
 - vista lateral en corte (pared por capas, tapones de plomo rayados, cavidad de electrónica,
   herraje, aletas en verdadera magnitud, CG, CP y brazo SM·D) y vista posterior (aletas con su
   rotación y círculo del D aparente);
-- cotas: L, L_n, L_c, L_t, D, d_popa, D_ap, Δx_LE (desde el inicio de la cola), x_s, c_t, c_r, h,
+- cotas: L, L_n, L_c, L_t, D, d_popa, D_ap, H_ap (altura aparente: mínima altura de caja con el
+  sensor acostado y girado a su mejor ángulo, con el espesor de las aletas), Δx_LE (desde el inicio de la cola), x_s, c_t, c_r, h,
   espesor de aleta, tapones de plomo y posición y largo de la cavidad; tabla de cotas con los
   mismos textos;
 - escala normalizada (la mayor de 1:1, 1:1.5, 1:2, … que cabe), barra de escala, notas y cajetín

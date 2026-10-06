@@ -34,6 +34,11 @@ def escribir_csv(df: pd.DataFrame, ruta: Path, columnas: list[str] | None = None
     ruta.parent.mkdir(parents=True, exist_ok=True)
     if columnas is not None:
         df = df.reindex(columns=list(dict.fromkeys(columnas + [c for c in df.columns if c not in columnas])))
+    # J y J_or con todas sus cifras: con %.6g y J ≈ 10⁴ la resolución es 0.1 y se pierde el último
+    # criterio (SM, peso 1), así que dos candidatos distintos parecerían empatados
+    precisos = {c: df[c].map(lambda v: f"{v:.12g}") for c in ("J", "J_or") if c in df}
+    if precisos:
+        df = df.assign(**precisos)
     df.to_csv(ruta, index=False, float_format="%.6g")
 
 

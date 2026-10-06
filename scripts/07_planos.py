@@ -52,8 +52,12 @@ def ganadores(rk: pd.DataFrame, val: dict) -> pd.DataFrame:
     """Factibles ordenados por J_or (verificados y factibles en OR); sin verificación, por J."""
     if val and "J_or" in rk:
         ok = {c for c, v in val.items() if str(v.get("factible_or", "")).lower() in ("true", "1")}
-        g = rk[rk["cand_id"].isin(ok) & rk["J_or"].notna()].sort_values("J_or", kind="mergesort")
+        g = rk[rk["cand_id"].isin(ok) & rk["J_or"].notna()].sort_values(["J_or", "cand_id"], kind="mergesort")
         if len(g):
+            # el ganador del script 5 primero (eligió con J_or a precisión completa; el CSV puede venir redondeado)
+            if "ganador" in g:
+                es = g["ganador"].astype(str).str.lower().isin(["true", "1"])
+                g = pd.concat([g[es], g[~es]])
             return g
     return rk[rk["factible"]].sort_values("J", kind="mergesort")
 

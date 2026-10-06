@@ -239,8 +239,9 @@ def _vista_lateral(ax, det: Detalle, est: Estado | None, cot: _Cotas, Rmax: floa
             a0 = est.x_r0 / MM
             t = cot.h("plomo_trasero", a0, a0 + est.ell2 / MM, yp, "", (re(a0), re(a0 + est.ell2 / MM)))
             t.set_text(f"plomo {_txt(est.ell2 / MM)}")
-            t.set_position((a0 + est.ell2 / MM + 2, yp + 0.8))  # tapón corto: el texto va a su derecha
-            t.set_ha("left")
+            if est.ell2 / MM < 25.0:  # tapón corto: el texto no cabe sobre la cota y va a su derecha
+                t.set_position((a0 + est.ell2 / MM + 2, yp + 0.8))
+                t.set_ha("left")
         else:
             cot.valor("plomo_trasero", 0.0)
     # barra de escala
